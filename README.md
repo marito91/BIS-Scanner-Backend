@@ -23,9 +23,3 @@ Cada vez que esta aplicación registra un alquier o una devolución, también cr
 ## MONGO SERVER
 
 La base de datos es privada por ende no se puede compartir en esta aplicación.
-# BIS-Scanner-WebApp-Backend-
-# BIS-Scanner-WebApp-Backend
-# BIS-Scanner-WebApp-Backend
-# BIS-Scanner-WebApp-Backend
-# BIS-Scanner-WebApp-Backend
-# BIS-Scanner-WebApp-Backend
