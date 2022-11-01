@@ -28,3 +28,4 @@ La base de datos es privada por ende no se puede compartir en esta aplicación.
 # BIS-Scanner-WebApp-Backend
 # BIS-Scanner-WebApp-Backend
 # BIS-Scanner-WebApp-Backend
+# BIS-Scanner-WebApp-Backend
