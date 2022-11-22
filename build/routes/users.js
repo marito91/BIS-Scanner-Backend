@@ -1,8 +1,15 @@
-const { Router } = require('express');
+"use strict";
+
+const {
+  Router
+} = require('express');
 const users = Router();
-const { entryModel } = require('../models/entryModel');
-const { communityModel } = require('../models/communityModel');
-const nodemailer = require('nodemailer');
+const {
+  entryModel
+} = require('../models/entryModel');
+const {
+  communityModel
+} = require('../models/communityModel');
 
 /**
  * X) Function date
@@ -17,11 +24,9 @@ function getDateTime() {
   const yyyy = today.getFullYear();
   const h = String(today.getHours());
   const m = String(today.getMinutes()).padStart(2, '0');
-
   today = mm + '/' + dd + '/' + yyyy;
   // Saca hora actual
   const time = h + ':' + m;
-
   return [today, time];
 }
 /**
@@ -34,20 +39,27 @@ function getDateTime() {
 
 function overwrite(stu, dev, num, dat, tim) {
   // Busca al estudiante que se va a actualizar por su documento (code : student)
-  communityModel.updateOne(
-    { code: stu },
-    // Hace los respectivos cambios en el registro encontrado
-    { $set: { device: dev, number: num, date: dat, time: tim, active: true } },
-    function (error) {
-      // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
-      if (error) {
-        res.send({
-          estado: 'error',
-          msg: 'No se pudo registrar el aquiler por problemas en la actualización del usuario.',
-        });
-      }
+  communityModel.updateOne({
+    code: stu
+  },
+  // Hace los respectivos cambios en el registro encontrado
+  {
+    $set: {
+      device: dev,
+      number: num,
+      date: dat,
+      time: tim,
+      active: true
     }
-  );
+  }, function (error) {
+    // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
+    if (error) {
+      res.send({
+        estado: 'error',
+        msg: 'No se pudo registrar el aquiler por problemas en la actualización del usuario.'
+      });
+    }
+  });
 }
 
 /**
@@ -60,22 +72,28 @@ function overwrite(stu, dev, num, dat, tim) {
 
 function returnDevice(dev, num, dat, tim) {
   // Busca al usuario que se va a actualizar según el dispositivo y número (device: dev, number: num)
-  communityModel.updateOne(
-    { device: dev, number: num },
-    // Hace los respectivos cambios en el registro encontrado
-    {
-      $set: { device: 'none', number: 0, date: dat, time: tim, active: false },
-    },
-    function (error) {
-      // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
-      if (error) {
-        res.send({
-          estado: 'error',
-          msg: 'No se pudo registrar la devolución del equipo por problemas en la actualización del usuario.',
-        });
-      }
+  communityModel.updateOne({
+    device: dev,
+    number: num
+  },
+  // Hace los respectivos cambios en el registro encontrado
+  {
+    $set: {
+      device: 'none',
+      number: 0,
+      date: dat,
+      time: tim,
+      active: false
     }
-  );
+  }, function (error) {
+    // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
+    if (error) {
+      res.send({
+        estado: 'error',
+        msg: 'No se pudo registrar la devolución del equipo por problemas en la actualización del usuario.'
+      });
+    }
+  });
 }
 
 /**
@@ -86,19 +104,7 @@ function returnDevice(dev, num, dat, tim) {
  * Purpose: Registers a new entry everytime something is done in the application. Creates a history of processes.
  */
 
-function registerEntry(
-  stu,
-  name,
-  last,
-  secondLast,
-  sec,
-  mail,
-  dev,
-  num,
-  dat,
-  tim,
-  typ
-) {
+function registerEntry(stu, name, last, secondLast, sec, mail, dev, num, dat, tim, typ) {
   const newEntry = new entryModel({
     code: stu,
     firstName: name,
@@ -110,7 +116,7 @@ function registerEntry(
     number: num,
     date: dat,
     time: tim,
-    type: typ,
+    type: typ
   });
   newEntry.save(function (error) {
     if (error) {
@@ -129,67 +135,32 @@ function registerEntry(
  */
 users.post('/prueba', async function (req, res) {
   // Se recibe la información del frontend
-  const { mensaje } = req.body;
-  mensaje.txt === 'Mensaje de prueba'
-    ? res.send({
-        status: 'ok',
-        msg: 'La aplicación se encuentra conectada al servidor.',
-      })
-    : res.send({
-        status: 'Error',
-        msg: 'La aplicación no pudo establecer una conexión estable al servidor. Por favor contacte a soporte.',
-      });
+  const {
+    mensaje
+  } = req.body;
+  mensaje.txt === 'Mensaje de prueba' ? res.send({
+    status: 'ok',
+    msg: 'La aplicación se encuentra conectada al servidor.'
+  }) : res.send({
+    status: 'Error',
+    msg: 'La aplicación no pudo establecer una conexión estable al servidor. Por favor contacte a soporte.'
+  });
 });
 
 /**
- * X)
- * Name : Enviar email
- * Method :
- * Route :
- */
-function sendEmail(emailList) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'mariogomez@britishschool.edu.co',
-      pass: `${process.env.password}`,
-    },
-  });
-
-  const mailOptions = {
-    from: 'mariogomez@britishschool.edu.co',
-    to: emailList,
-    subject: 'Knowledge Centre Notification',
-    text: 'Querido/a usuario,\n Usted tiene alquilado en este momento un dispositivo de biblioteca. Por favor regresarlo inmediatamente al Knowledge Centre.',
-  };
-
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-    } else {
-      console.log('Email sent: ' + info.response);
-    }
-  });
-}
-
-/**
  * 1)
- * Name : Rent devices
+ * Name : Subscribe new users
  * Method : POST
  * Route : /rent
  */
 users.post('/rent', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const {
+    userInfo
+  } = req.body;
 
   // El objeto se desestructura en diferentes variables
-  const [student, device, number, entryDate, entryTime] = [
-    userInfo.code,
-    userInfo.device,
-    userInfo.number,
-    getDateTime()[0],
-    getDateTime()[1],
-  ];
+  const [student, device, number, entryDate, entryTime] = [userInfo.code, userInfo.device, userInfo.number, getDateTime()[0], getDateTime()[1]];
   // Se hace validación en consola para revisar si los datos llegaron correctamente.
   console.log('Member code: ' + student);
   console.log('Device: ' + device);
@@ -198,12 +169,14 @@ users.post('/rent', async function (req, res) {
   console.log('Entry Time: ' + entryTime);
 
   // Se busca primero si el usuario existe en base de datos por medio del número de documento.
-  const exists = await communityModel.findOne({ code: parseInt(student) });
+  const exists = await communityModel.findOne({
+    code: parseInt(student)
+  });
   // Si el estudiante no existe, envía un mensaje indicando que el usuario no se encuentra registrado en la base de datos.
   if (!exists) {
     res.send({
       status: 'error',
-      msg: `El usuario ${userInfo.code} no se encuentra registrado en nuestra base de datos.`,
+      msg: `El usuario ${userInfo.code} no se encuentra registrado en nuestra base de datos.`
     });
     // Si por lo contrario, el usuario sí existe, se revisa que no tenga un dispositivo alquilado ya.
   } else {
@@ -211,32 +184,17 @@ users.post('/rent', async function (req, res) {
     if (exists.active) {
       res.send({
         status: 'Error',
-        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.code} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`,
+        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.code} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`
       });
     } else {
       // De lo contrario ya pasó todas las validaciones y se procede a editar el registro y asignarle el dispositivo al estudiante por medio de la función de overwrite.
-      overwrite(
-        parseInt(student),
-        device,
-        parseInt(number),
-        entryDate,
-        entryTime
-      );
+      overwrite(parseInt(student), device, parseInt(number), entryDate, entryTime);
       // Se realiza movimiento por ende se registra en base de datos.
-      registerEntry(
-        exists.code,
-        exists.firstName,
-        exists.lastName,
-        exists.secondLastName,
-        exists.grade,
-        exists.email,
-        device,
-        parseInt(number),
-        entryDate,
-        entryTime,
-        'ALQUILER'
-      );
-      res.send({ estado: 'ok', msg: 'Alquiler registrado con éxito.' });
+      registerEntry(exists.code, exists.firstName, exists.lastName, exists.secondLastName, exists.grade, exists.email, device, parseInt(number), entryDate, entryTime, 'ALQUILER');
+      res.send({
+        estado: 'ok',
+        msg: 'Alquiler registrado con éxito.'
+      });
     }
   }
 });
@@ -249,14 +207,11 @@ users.post('/rent', async function (req, res) {
  */
 users.post('/return', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const {
+    userInfo
+  } = req.body;
   // El objeto se desestructura en diferentes variables
-  const [type, num, entryDate, entryTime] = [
-    userInfo.device,
-    userInfo.number,
-    getDateTime()[0],
-    getDateTime()[1],
-  ];
+  const [type, num, entryDate, entryTime] = [userInfo.device, userInfo.number, getDateTime()[0], getDateTime()[1]];
   // Se hace validación en consola para revisar si los datos llegaron correctamente.
   console.log('Device: ' + type);
   console.log('Number: ' + num);
@@ -266,34 +221,22 @@ users.post('/return', async function (req, res) {
   // Se busca primero el registro que corresponda al tipo de dispositivo y número que se solicita desde frontend.
   const exists = await communityModel.findOne({
     device: type,
-    number: parseInt(num),
+    number: parseInt(num)
   });
   // Si el registro no existe, envía un mensaje indicando que no se encontró un registro de ese dispositivo en base de datos.
   if (!exists) {
     res.send({
       status: 'error',
-      msg: `No se encontró en base de datos un registro que corresponda al ${type} #${num}`,
+      msg: `No se encontró en base de datos un registro que corresponda al ${type} #${num}`
     });
     // Si por lo contrario, se encuentra un registro entonces se pasa a realizar el proceso de devolución.
   } else {
     returnDevice(type, parseInt(num), entryDate, entryTime);
     //  Debido a que se realiza un movimiento, este se registra en base de datos.
-    registerEntry(
-      exists.code,
-      exists.firstName,
-      exists.lastName,
-      exists.secondLastName,
-      exists.grade,
-      exists.email,
-      type,
-      parseInt(num),
-      entryDate,
-      entryTime,
-      'DEVOLUCION'
-    );
+    registerEntry(exists.code, exists.firstName, exists.lastName, exists.secondLastName, exists.grade, exists.email, type, parseInt(num), entryDate, entryTime, 'DEVOLUCION');
     res.send({
       estado: 'ok',
-      msg: `El ${exists.device} #${exists.number} alquilado por ${exists.firstName} ${exists.lastName} fue devuelto exitosamente.`,
+      msg: `El ${exists.device} #${exists.number} alquilado por ${exists.firstName} ${exists.lastName} fue devuelto exitosamente.`
     });
   }
 });
@@ -306,7 +249,9 @@ users.post('/return', async function (req, res) {
  */
 users.post('/search', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const {
+    userInfo
+  } = req.body;
   // El objeto se desestructura en diferentes variables
   const [type, num] = [userInfo.device, userInfo.number];
   // Se hace validación en consola para revisar si los datos llegaron correctamente.
@@ -316,19 +261,19 @@ users.post('/search', async function (req, res) {
   // Se busca primero el registro que corresponda al tipo de dispositivo y número que se solicita desde frontend.
   const exists = await communityModel.findOne({
     device: type,
-    number: parseInt(num),
+    number: parseInt(num)
   });
   // Si el registro no existe, envía un mensaje indicando que no se encontró un registro de ese dispositivo en base de datos.
   if (!exists) {
     res.send({
       status: 'error',
-      msg: `El ${type} #${num} no se encuentra alquilado en este momento.`,
+      msg: `El ${type} #${num} no se encuentra alquilado en este momento.`
     });
     // Si por lo contrario, se encuentra un registro entonces se indica quién lo tiene y desde cuándo.
   } else {
     res.send({
       estado: 'ok',
-      msg: `El ${exists.device} #${exists.number} se encuentra alquilado por ${exists.firstName} ${exists.lastName} ${exists.secondLastName} de ${exists.grade} desde el ${exists.date} a las ${exists.time}.`,
+      msg: `El ${exists.device} #${exists.number} se encuentra alquilado por ${exists.firstName} ${exists.lastName} ${exists.secondLastName} de ${exists.grade} desde el ${exists.date} a las ${exists.time}.`
     });
   }
 });
@@ -341,25 +286,26 @@ users.post('/search', async function (req, res) {
  */
 users.post('/entries', async function (req, res) {
   // Se recibe la información del frontend
-  const { searchInfo } = req.body;
-  const [doc, dat, filt] = [
-    parseInt(searchInfo.document),
-    searchInfo.date,
-    searchInfo.filter,
-  ];
+  const {
+    searchInfo
+  } = req.body;
+  const [doc, dat, filt] = [parseInt(searchInfo.document), searchInfo.date, searchInfo.filter];
   console.log(dat);
   const dateArr = dat.split('-');
   console.log(dateArr);
   const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
   console.log(fixedDate);
-
   let data = {};
-
-  filt === 'Documento'
-    ? (data = await entryModel.find({ code: doc }))
-    : (data = await entryModel.find({ date: fixedDate }));
-
-  res.send({ status: 'ok', msg: 'Info found', data });
+  filt === 'Documento' ? data = await entryModel.find({
+    code: doc
+  }) : data = await entryModel.find({
+    date: fixedDate
+  });
+  res.send({
+    status: 'ok',
+    msg: 'Info found',
+    data
+  });
 });
 
 /**
@@ -373,37 +319,23 @@ users.get('/devices', function (req, res) {
   let data = {};
 
   // Se buscan todos los registros que tengan un dispositivo rentado.
-  communityModel.find({ active: true }, function (error, activeOnes) {
+  communityModel.find({
+    active: true
+  }, function (error, activeOnes) {
     if (error) {
       res.send({
         status: 'Error',
-        msg: 'No se pudo establecer uan conexión a base de datos.',
+        msg: 'No se pudo establecer uan conexión a base de datos.'
       });
     } else {
       data = activeOnes;
-      res.send({ status: 'ok', msg: 'Info found', data });
+      res.send({
+        status: 'ok',
+        msg: 'Info found',
+        data
+      });
     }
   });
 });
-
-/**
- * 6)
- * Name : Send notifications to users
- * Method : POST
- * Route : /notification
- */
-users.post('/notification', function (req, res) {
-  // Se inicializa el objeto que se recibe (disposititvos rentados)
-  const { rented } = req.body;
-  console.log(rented);
-
-  const emails = rented.map((user) => user.email);
-
-  sendEmail(emails);
-  res.send({
-    status: 'ok',
-    msg: 'Las notificaciones fueron enviadas por correo a los usuarios.',
-  });
-});
-
 exports.users = users;
+//# sourceMappingURL=users.js.map

@@ -1,0 +1,14 @@
+
+> backendkcscanner@1.0.0 start
+> npm run build && node ./build/server.js
+
+
+> backendkcscanner@1.0.0 build
+> npm run build:babel
+
+
+> backendkcscanner@1.0.0 build:babel
+> babel -d ./build ./src -s
+
+Successfully compiled 4 files with Babel (528ms).
+Server listening on port 5001
