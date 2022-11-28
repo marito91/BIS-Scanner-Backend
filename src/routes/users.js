@@ -147,7 +147,7 @@ users.post('/prueba', async function (req, res) {
  * Method :
  * Route :
  */
-function sendEmail(emailList) {
+function sendEmail(emailList, msg) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -160,7 +160,7 @@ function sendEmail(emailList) {
     from: 'mariogomez@britishschool.edu.co',
     to: emailList,
     subject: 'Knowledge Centre Notification',
-    text: 'Querido/a usuario,\n Usted tiene alquilado en este momento un dispositivo de biblioteca. Por favor regresarlo inmediatamente al Knowledge Centre.',
+    text: msg,
   };
 
   transporter.sendMail(mailOptions, function (error, info) {
@@ -180,13 +180,13 @@ function sendEmail(emailList) {
  */
 users.post('/rent', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const { user } = req.body;
 
   // El objeto se desestructura en diferentes variables
   const [student, device, number, entryDate, entryTime] = [
-    userInfo.code,
-    userInfo.device,
-    userInfo.number,
+    user.document,
+    user.device,
+    user.number,
     getDateTime()[0],
     getDateTime()[1],
   ];
@@ -203,7 +203,7 @@ users.post('/rent', async function (req, res) {
   if (!exists) {
     res.send({
       status: 'error',
-      msg: `El usuario ${userInfo.code} no se encuentra registrado en nuestra base de datos.`,
+      msg: `El usuario ${user.document} no se encuentra registrado en nuestra base de datos.`,
     });
     // Si por lo contrario, el usuario sí existe, se revisa que no tenga un dispositivo alquilado ya.
   } else {
@@ -211,7 +211,7 @@ users.post('/rent', async function (req, res) {
     if (exists.active) {
       res.send({
         status: 'Error',
-        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.code} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`,
+        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.document} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`,
       });
     } else {
       // De lo contrario ya pasó todas las validaciones y se procede a editar el registro y asignarle el dispositivo al estudiante por medio de la función de overwrite.
@@ -224,7 +224,7 @@ users.post('/rent', async function (req, res) {
       );
       // Se realiza movimiento por ende se registra en base de datos.
       registerEntry(
-        exists.code,
+        exists.document,
         exists.firstName,
         exists.lastName,
         exists.secondLastName,
@@ -236,6 +236,8 @@ users.post('/rent', async function (req, res) {
         entryTime,
         'ALQUILER'
       );
+      const message = `Estimado/a usuario,\nUsted ha alquilado el ${device} #${number} en el Knowledge Centre el día de hoy. Recuerde devolverlo al finalizar la jornada escolar.\nMuchas gracias por usar nuestro servicio.\nAtentamente,`;
+      sendEmail(exists.email, message);
       res.send({ estado: 'ok', msg: 'Alquiler registrado con éxito.' });
     }
   }
@@ -249,11 +251,11 @@ users.post('/rent', async function (req, res) {
  */
 users.post('/return', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const { device, number } = req.body;
   // El objeto se desestructura en diferentes variables
   const [type, num, entryDate, entryTime] = [
-    userInfo.device,
-    userInfo.number,
+    device,
+    Number(number),
     getDateTime()[0],
     getDateTime()[1],
   ];
@@ -279,7 +281,7 @@ users.post('/return', async function (req, res) {
     returnDevice(type, parseInt(num), entryDate, entryTime);
     //  Debido a que se realiza un movimiento, este se registra en base de datos.
     registerEntry(
-      exists.code,
+      exists.document,
       exists.firstName,
       exists.lastName,
       exists.secondLastName,
@@ -291,6 +293,8 @@ users.post('/return', async function (req, res) {
       entryTime,
       'DEVOLUCION'
     );
+    const message = `Estimado/a usuario,\nUsted ha devuelto el ${type} #${num} al Knowledge Centre exitosamente. Gracias por utilizar nuestro servicio.`;
+    sendEmail(exists.email, message);
     res.send({
       estado: 'ok',
       msg: `El ${exists.device} #${exists.number} alquilado por ${exists.firstName} ${exists.lastName} fue devuelto exitosamente.`,
@@ -306,9 +310,9 @@ users.post('/return', async function (req, res) {
  */
 users.post('/search', async function (req, res) {
   // Se recibe la información del frontend
-  const { userInfo } = req.body;
+  const { searchInfo } = req.body;
   // El objeto se desestructura en diferentes variables
-  const [type, num] = [userInfo.device, userInfo.number];
+  const [type, num] = [searchInfo.device, searchInfo.number];
   // Se hace validación en consola para revisar si los datos llegaron correctamente.
   console.log('Device: ' + type);
   console.log('Number: ' + num);
@@ -377,7 +381,7 @@ users.get('/devices', function (req, res) {
     if (error) {
       res.send({
         status: 'Error',
-        msg: 'No se pudo establecer uan conexión a base de datos.',
+        msg: 'No se pudo establecer una conexión a base de datos.',
       });
     } else {
       data = activeOnes;
@@ -388,18 +392,46 @@ users.get('/devices', function (req, res) {
 
 /**
  * 6)
- * Name : Send notifications to users
+ * Name : Send notifications to one user
  * Method : POST
  * Route : /notification
  */
 users.post('/notification', function (req, res) {
   // Se inicializa el objeto que se recibe (disposititvos rentados)
+  const { user } = req.body;
+  console.log(user);
+
+  // Se crea un array de emails solamente para enviarles la notificacion
+  const email = user.email;
+
+  const mailText = `Estimado/a ${user.name},\nUsted tiene alquilado en este momento un dispositivo de biblioteca. Por favor regresarlo a más tardar el día de hoy al Knowledge Centre.\nMuchas gracias`;
+
+  // Se aplica la funcion de sendEmail con el array de correos creado recientemente
+  sendEmail(email, mailText);
+  res.send({
+    status: 'ok',
+    msg: 'El usuario fue notificado por correo.',
+  });
+});
+
+/**
+ * 7)
+ * Name : Send notifications to all users
+ * Method : POST
+ * Route : /notification
+ */
+users.post('/notification_all', function (req, res) {
+  // Se inicializa el objeto que se recibe (disposititvos rentados)
   const { rented } = req.body;
   console.log(rented);
 
+  // Se crea un array de emails solamente para enviarles la notificacion
   const emails = rented.map((user) => user.email);
 
-  sendEmail(emails);
+  const mailText =
+    'Estimado/a usuario,\nUsted tiene alquilado en este momento un dispositivo de biblioteca. Por favor regresarlo inmediatamente al Knowledge Centre.';
+  // Se aplica la funcion de sendEmail con el array de correos creado recientemente
+  sendEmail(emails, mailText);
   res.send({
     status: 'ok',
     msg: 'Las notificaciones fueron enviadas por correo a los usuarios.',
