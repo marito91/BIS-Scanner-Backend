@@ -181,10 +181,11 @@ function sendEmail(emailList, msg) {
 users.post('/rent', async function (req, res) {
   // Se recibe la información del frontend
   const { user } = req.body;
+  console.log(typeof user.document);
 
   // El objeto se desestructura en diferentes variables
   const [student, device, number, entryDate, entryTime] = [
-    user.document,
+    parseInt(user.document),
     user.device,
     user.number,
     getDateTime()[0],
@@ -211,7 +212,7 @@ users.post('/rent', async function (req, res) {
     if (exists.active) {
       res.send({
         status: 'Error',
-        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.document} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`,
+        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.code} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`,
       });
     } else {
       // De lo contrario ya pasó todas las validaciones y se procede a editar el registro y asignarle el dispositivo al estudiante por medio de la función de overwrite.
@@ -224,7 +225,7 @@ users.post('/rent', async function (req, res) {
       );
       // Se realiza movimiento por ende se registra en base de datos.
       registerEntry(
-        exists.document,
+        exists.code,
         exists.firstName,
         exists.lastName,
         exists.secondLastName,
@@ -281,7 +282,7 @@ users.post('/return', async function (req, res) {
     returnDevice(type, parseInt(num), entryDate, entryTime);
     //  Debido a que se realiza un movimiento, este se registra en base de datos.
     registerEntry(
-      exists.document,
+      exists.code,
       exists.firstName,
       exists.lastName,
       exists.secondLastName,
