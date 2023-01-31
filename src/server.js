@@ -3,6 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 // Main routes for APIs
+const { devices } = require('./routes/devices');
+const { books } = require('./routes/books');
 const { users } = require('./routes/users');
 
 const app = express();
@@ -15,6 +17,8 @@ require('dotenv').config();
 
 // APIs
 app.use('/users', users);
+app.use('/devices', devices);
+app.use('/books', books);
 
 // Database connection
 mongoose

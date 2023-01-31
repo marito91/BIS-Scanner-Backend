@@ -1,6 +1,6 @@
 const { model, Schema } = require('mongoose');
 
-const entrySchema = new Schema(
+const recordSchema = new Schema(
   {
     grade: {
       type: 'string',
@@ -18,7 +18,7 @@ const entrySchema = new Schema(
       type: 'string',
       required: true,
     },
-    code: {
+    document: {
       type: 'number',
       required: true,
     },
@@ -46,12 +46,16 @@ const entrySchema = new Schema(
       type: 'string',
       required: true,
     },
+    book: {
+      type: 'array',
+      required: true,
+    },
   },
   {
     versionKey: false,
   }
 );
 
-const EntryModel = model('entry', entrySchema);
+const RecordModel = model('record', recordSchema);
 
-exports.EntryModel = EntryModel;
+exports.RecordModel = RecordModel;

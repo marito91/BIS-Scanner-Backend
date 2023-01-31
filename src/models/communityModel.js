@@ -1,4 +1,5 @@
 const { model, Schema } = require('mongoose');
+// const { genSalt, hash } = require('bcryptjs');
 
 const communitySchema = new Schema(
   {
@@ -26,14 +27,6 @@ const communitySchema = new Schema(
       type: 'string',
       required: true,
     },
-    date: {
-      type: 'string',
-      required: true,
-    },
-    time: {
-      type: 'string',
-      required: true,
-    },
     device: {
       type: 'string',
       required: true,
@@ -43,6 +36,19 @@ const communitySchema = new Schema(
       required: true,
     },
     active: {
+      type: 'boolean',
+      required: true,
+    },
+    books: {
+      type: 'array',
+      default: ['none'],
+      required: true,
+    },
+    blocked: {
+      type: 'boolean',
+      required: true,
+    },
+    libraryFine: {
       type: 'boolean',
       required: true,
     },
