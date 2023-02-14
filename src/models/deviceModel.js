@@ -36,6 +36,6 @@ const deviceSchema = new Schema(
   }
 );
 
-const deviceModel = model('device', deviceSchema);
+const DeviceModel = model('device', deviceSchema);
 
-exports.deviceModel = deviceModel;
+exports.DeviceModel = DeviceModel;

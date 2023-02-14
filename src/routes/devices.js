@@ -1,15 +1,14 @@
 const { Router } = require('express');
 const devices = Router();
-const { EntryModel } = require('../models/entryModel');
 const { RecordModel } = require('../models/recordModel');
 const { communityModel } = require('../models/communityModel');
-const { deviceModel } = require('../models/deviceModel');
+const { DeviceModel } = require('../models/deviceModel');
 const nodemailer = require('nodemailer');
 
 /**
  * This file contains all the routes related to device management in the application.
  * Previous to this documentation are the models and packages installed to be able to use several of the tools offered by the application.
- * communityModel will be used to manage all of the school's users, EntryModel to register every movement, and deviceModel to manage each device.
+ * communityModel will be used to manage all of the school's users, EntryModel to register every movement, and DeviceModel to manage each device.
  * Nodemailer is used as a mail manager to send notifications to users.
  */
 
@@ -69,7 +68,7 @@ function overwrite(user) {
     }
   );
   // This function will also search for the device in the devices collection. Device type and number need to be the same so that changes are applied.
-  deviceModel.updateOne(
+  DeviceModel.updateOne(
     { device: user.device, number: user.number, available: true },
     // After validating device and number, and if it is available, the entry will be updated.
     {
@@ -124,7 +123,7 @@ function returnDevice(dev, num) {
     }
   );
   // It searches for the device to be returned in the devices collection. (It updates it to available again.)
-  deviceModel.updateOne(
+  DeviceModel.updateOne(
     { device: dev, number: num },
     // After finding the entry, it sets the new information.
     {
@@ -143,36 +142,6 @@ function returnDevice(dev, num) {
       }
     }
   );
-}
-
-/**
- * X) Function registerEntry
- * Name : Register entry
- * METHOD : Database connected
- * Params: Receives all info for later checking
- * Purpose: Registers a new entry everytime something is done in the application. Creates a history of processes.
- */
-function registerEntry(existingUser, dev, num, movement) {
-  const newEntry = new EntryModel({
-    code: existingUser.code,
-    firstName: existingUser.firstName,
-    lastName: existingUser.lastName,
-    secondLastName: existingUser.secondLastName,
-    grade: existingUser.grade,
-    email: existingUser.email,
-    device: dev,
-    number: num,
-    date: getDateTime()[0],
-    time: getDateTime()[1],
-    type: movement,
-  });
-  newEntry.save(function (error) {
-    if (error) {
-      console.log(error);
-      console.log('No se pudo crear un nuevo registro de movimiento.');
-    }
-    console.log('Registro exitoso.');
-  });
 }
 
 /**
@@ -276,7 +245,7 @@ devices.post('/rent', async function (req, res) {
   });
 
   // We also check if the device is already rented or not in the devices collection.
-  const isRented = await deviceModel.findOne({
+  const isRented = await DeviceModel.findOne({
     device: user.device,
     number: user.number,
   });
@@ -293,7 +262,7 @@ devices.post('/rent', async function (req, res) {
     if (exists.active) {
       res.send({
         status: 'Error',
-        msg: `The user ${exists.firstName} ${exists.lastName} with document ${exists.code} currently has the device ${exists.device} #${exists.number} rented. It was rented on ${isRented.date} at ${isRented.time} and has not been returned yet.`,
+        msg: `The user ${exists.firstName} ${exists.lastName} with document ${exists.code} currently has the device ${exists.device} #${exists.number} rented.`,
       });
     } else {
       // If the device requested is already rented (which should not happen as it is available physically), a message will be sent to front end requiring to choose another device.
@@ -305,7 +274,6 @@ devices.post('/rent', async function (req, res) {
       } else {
         // If all conditions are met and validated, we proceed to register a new record (updateRecords function), assign the device to the requested user (overwrite function) and send the email notification (sendEmail function) with the corresponding message.
         overwrite(user);
-        registerEntry(exists, device, parseInt(number), 'ALQUILER');
         updateRecords(exists, device, parseInt(number), 'RENT', ['none']);
         const message = `Dear user,\nYou have rented the ${device} #${number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
         sendEmail(exists.email, message);
@@ -338,7 +306,7 @@ devices.post('/return', async function (req, res) {
   });
 
   // Then we check if the device really is rented.
-  const rentedDevice = await deviceModel.findOne({
+  const rentedDevice = await DeviceModel.findOne({
     device: type,
     number: parseInt(num),
   });
@@ -360,7 +328,6 @@ devices.post('/return', async function (req, res) {
     const message = `Dear user,\nYou returned the ${type} #${num} to the Knowledge Centre successfully. Thank you for using our service.`;
     returnDevice(type, parseInt(num));
     //  Since this is also a new record, we need to register a new entry in the records collection and send an email to the person that returned the device.
-    registerEntry(exists, type, parseInt(num), 'DEVOLUCION');
     updateRecords(exists, device, parseInt(number), 'RETURN', ['none']);
     // The email is sent the person who returned the device followed by the message written above.
     sendEmail(exists.email, message);
@@ -392,7 +359,7 @@ devices.post('/search', async function (req, res) {
     number: parseInt(num),
   });
 
-  const rentedDevice = await deviceModel.findOne({
+  const rentedDevice = await DeviceModel.findOne({
     device: type,
     number: parseInt(num),
   });
@@ -407,7 +374,7 @@ devices.post('/search', async function (req, res) {
   } else {
     res.send({
       estado: 'ok',
-      msg: `The ${rentedDevice.device} #${rentedDevice.number} is currently rented by ${exists.firstName} ${exists.lastName} ${exists.secondLastName} from ${exists.grade} since ${rentedDevice.date} at ${rentedDevice.time} and with the following conditions: ${rentedDevice.comments}.`,
+      msg: `The ${exists.device} #${exists.number} is currently rented by ${exists.firstName} ${exists.lastName} ${exists.secondLastName} from ${exists.grade} since ${exists.date} at ${exists.time} and with the following conditions: ${exists.comments}.`,
     });
   }
 });
@@ -422,8 +389,9 @@ devices.post('/search', async function (req, res) {
 devices.post('/entries/document', async function (req, res) {
   // Se recibe la información del frontend
   const { searchInfo } = req.body;
-  const doc = parseInt(searchInfo.document);
-  const data = await RecordModel.find({ document: doc });
+  const data = await RecordModel.find({
+    document: parseInt(searchInfo.document),
+  });
 
   res.send({ status: 'ok', msg: 'Info found', data });
 });
@@ -464,25 +432,6 @@ devices.post('/entries/date', async function (req, res) {
 devices.get('/rented', function (req, res) {
   // The data is initialized as an object.
   let data = {};
-
-  // This part needs to be organized.
-  /*
-  const rentedDevices = deviceModel.find(
-    { available: false },
-    function (error, activeOnes) {
-      if (error) {
-        res.send({
-          status: 'Error',
-          msg: 'No se pudo establecer una conexión a base de datos.',
-        });
-      } else {
-        // The data is sent via the created object to frontend.
-        data = activeOnes;
-        res.send({ status: 'ok', msg: 'Info found', data });
-      }
-    }
-  );
-  */
 
   // A search for all the users who have a rented device is done in the communities collection.
   communityModel.find({ active: true }, function (error, activeOnes) {

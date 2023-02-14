@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const users = Router();
-const { adminModel } = require('../models/adminModel');
+const { AdminModel } = require('../models/adminModel');
 const { compare } = require('bcryptjs');
 const { sign } = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -60,7 +60,7 @@ users.post('/login', async function (req, res) {
   const password = localUser.password;
 
   // Checks if the user exists in DB
-  const exists = await adminModel.findOne({ email: username });
+  const exists = await AdminModel.findOne({ email: username });
 
   // If the user does not exist, it sends a message indicating that the user does not exist in the database. (Since it is a reduced and controlled list then few users will have access.)
   if (!exists) {
@@ -108,7 +108,7 @@ users.post('/request_password', async function (req, res) {
   const requestedEmail = email;
 
   // Checks if the user exists in DB
-  const exists = await adminModel.findOne({ email: requestedEmail });
+  const exists = await AdminModel.findOne({ email: requestedEmail });
 
   // If the user is not part of the admins list, then an error message will be sent.
   if (!exists) {
@@ -148,7 +148,7 @@ users.post('/signup', function (req, res) {
 
   // It the list includes the requested email then it will search for an entry inside the database to check if it already exists.
   if (admins.includes(localUser.username)) {
-    adminModel.findOne({ email: localUser.username }, function (error, exists) {
+    AdminModel.findOne({ email: localUser.username }, function (error, exists) {
       if (error) {
         return res.send({
           status: 'error',
@@ -167,7 +167,7 @@ users.post('/signup', function (req, res) {
           });
           // If the user is not part of the database list, then it will create a new entry with the necessary information.
         } else {
-          const newAdmin = new adminModel({
+          const newAdmin = new AdminModel({
             password: localUser.password,
             email: localUser.username,
           });

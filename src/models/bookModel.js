@@ -49,6 +49,14 @@ const bookSchema = new Schema({
     type: 'string',
     required: true,
   },
+  condition: {
+    type: 'string',
+    required: true,
+  },
+  dewey: {
+    type: 'string',
+    required: true,
+  },
 });
 
 const BookModel = model('book', bookSchema);

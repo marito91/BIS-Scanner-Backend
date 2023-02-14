@@ -35,6 +35,6 @@ adminSchema.pre('save', async function (next) {
   next();
 });
 
-const adminModel = model('admin', adminSchema);
+const AdminModel = model('admin', adminSchema);
 
-exports.adminModel = adminModel;
+exports.AdminModel = AdminModel;

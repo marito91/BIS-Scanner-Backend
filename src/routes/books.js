@@ -6,6 +6,19 @@ const { communityModel } = require('../models/communityModel');
 const { BookModel } = require('../models/bookModel');
 const nodemailer = require('nodemailer');
 
+const mockData = [
+  {
+    title: 'The Adventures of Captain Underpants.',
+    author: 'Dav Pilkey',
+    year: '1997',
+  },
+  {
+    title: 'Sisters',
+    author: 'Raina Telgemeier',
+    year: '2014',
+  },
+];
+
 /**
  * X) Function date
  * Name : Get current date and time
@@ -54,8 +67,9 @@ function updateRecords(existingUser, movement, bookInfo) {
     if (error) {
       console.log(error);
       console.log('Could not register a new record.');
+    } else {
+      console.log('New record registered.');
     }
-    console.log('New record registered.');
   });
 }
 
@@ -102,10 +116,13 @@ function sendEmail(emailList, msg) {
  * Name : Rent books
  * Method : POST
  * Route : /rent
+ * Description : This route will let the application receive the required information from frontend to be able to assign/rent a book to a certain user. The function receives a document number and a barcode. With this information it assigns the book to the user after checking all of the conditions required.
  */
 books.post('/rent', async function (req, res) {
+  // Document and barcode json come from frontend
   const { document, barcode } = req.body;
 
+  // Then the code checks if both the user and book exist.
   const userExists = await communityModel.findOne({ code: parseInt(document) });
   const bookExists = await BookModel.findOne({
     barcode: barcode.toUpperCase(),
@@ -120,7 +137,10 @@ books.post('/rent', async function (req, res) {
   } else if (userExists.libraryFine) {
     status = 'Error';
     msg = 'User has a fine that needs to be paid.';
-  } else if (userExists.books[0] !== 'none') {
+  } else if (
+    userExists.books[0] !== 'none' ||
+    userExists.books[0] !== ['none']
+  ) {
     status = 'Error';
     msg = 'The user currently has a book rented.';
   } else if (!bookExists) {
@@ -227,6 +247,124 @@ books.get('/rented', function (req, res) {
       }
     }
   );
+});
+
+/**
+ * 4)
+ * Name : Get book collection
+ * Method : GET
+ * Route : /search
+ * Description : This route sends all of the book data to frontend so that users can search for any book they want.
+ */
+books.get('/search', async (req, res) => {
+  // An object is initialized.
+  let books = {};
+
+  // Inside the records
+  BookModel.find({}, function (error, allBooks) {
+    if (error) {
+      res.send({
+        status: 'Error',
+        msg: 'A connection to database could not be established.',
+      });
+    } else {
+      books = allBooks;
+      // console.log(usersThatHaveBooks);
+      res.send({ status: 'ok', msg: 'Info found', books });
+    }
+  });
+});
+
+/**
+ * 5)
+ * Name : Get book requested
+ * Method : GET
+ * Route : /getBook
+ * Description : This route sends all of the book data to frontend so that users can search for any book they want.
+ */
+books.post('/getBook', async (req, res) => {
+  // The barcode requested comes from client side.
+  const { barcode } = req.body;
+  const requestedBarcode = barcode.toUpperCase();
+  console.log(requestedBarcode);
+
+  // The book is searched in the data base.
+  const bookExists = await BookModel.findOne({ barcode: requestedBarcode });
+  console.log(bookExists);
+  if (!bookExists) {
+    res.send({
+      status: 'Error',
+      msg: `There is no entry for the barcode ${barcode} registered in our database.`,
+    });
+  } else {
+    res.send({ status: 'ok', msg: 'Book was found.', bookExists });
+  }
+});
+
+/**
+ * 6)
+ * Name : Create a new bok
+ * Method : POST
+ * Route : /newBook
+ * Description : This route receives all of the new book's information from client side and creates a new entry in the collection.
+ */
+books.post('/new-book', async (req, res) => {
+  // The book to be added to database comes from client side as an object.
+  const { book } = req.body;
+
+  //
+  const bookExists = await BookModel.findOne({
+    barcode: book.barcode.toUpperCase(),
+  });
+
+  if (bookExists) {
+    res.send({
+      status: 'Error',
+      msg: `The barcode ${bookExists.barcode} is already registered in our database for the book ${bookExists.title}`,
+    });
+  } else {
+    const newBook = new BookModel({
+      title: book.title,
+      author: book.author,
+      barcode: book.barcode,
+      publicationYear: book.publicationYear,
+      isbn: book.isbn,
+      price: book.price,
+      materialType: book.materialType,
+      sublocation: book.sublocation,
+      vendor: book.vendor,
+      circulationType: book.circulationType,
+      dewey: book.dewey,
+      condition: 'New',
+      dateRented: 'none',
+      available: true,
+    });
+    newBook.save(function (error) {
+      if (error) {
+        console.log(error);
+        return res.send({
+          status: 'error',
+          msg: "Couldn't register new book in the database",
+        });
+      }
+      res.send({
+        status: 'ok',
+        msg: `The book ${book.title} was registered in our database successfully!`,
+      });
+    });
+  }
+
+  // The book is searched in the data base.
+  // const bookExists = await BookModel.find({ barcode: requestedBarcode });
+
+  // if (!bookExists) {
+  //   res.send({
+  //     status: 'Error',
+  //     msg: `There is no entry for the barcode ${barcode} registered in our database.`,
+  //   });
+  // } else {
+  //   res.send({ status: 'ok', msg: 'Book was found.', bookExists });
+  // }
 });
 
 /** Routes to create
