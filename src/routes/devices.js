@@ -52,6 +52,8 @@ function overwrite(user) {
         device: user.device,
         number: user.number,
         active: true,
+        date: getDateTime()[0],
+        time: getDateTime()[1],
       },
     },
     function (error) {
@@ -189,19 +191,18 @@ function sendEmail(emailList, msg) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'mariogomez@britishschool.edu.co',
+      user: 'kc@britishschool.edu.co',
       pass: `${process.env.password}`,
     },
   });
 
   // All the information that goes in the email is written here.
   const mailOptions = {
-    from: 'mariogomez@britishschool.edu.co',
+    from: 'kc@britishschool.edu.co',
     to: emailList,
     subject: 'Knowledge Centre Notification',
     text:
-      msg +
-      '\n\nMario Andres Gomez Vargas\nIntegrador de Tecnología\nBritish International School',
+      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
   };
 
   // The email is sent
@@ -262,7 +263,11 @@ devices.post('/rent', async function (req, res) {
     if (exists.active) {
       res.send({
         status: 'Error',
-        msg: `The user ${exists.firstName} ${exists.lastName} with document ${exists.code} currently has the device ${exists.device} #${exists.number} rented.`,
+        msg: `The user ${exists.firstName} ${exists.lastName} with document ${
+          exists.code
+        } currently has the device ${exists.device} #${
+          exists.number
+        } rented since ${isRented ? isRented.date : 'NO DATE FOUND'}.`,
       });
     } else {
       // If the device requested is already rented (which should not happen as it is available physically), a message will be sent to front end requiring to choose another device.
@@ -374,7 +379,7 @@ devices.post('/search', async function (req, res) {
   } else {
     res.send({
       estado: 'ok',
-      msg: `The ${exists.device} #${exists.number} is currently rented by ${exists.firstName} ${exists.lastName} ${exists.secondLastName} from ${exists.grade} since ${exists.date} at ${exists.time} and with the following conditions: ${exists.comments}.`,
+      msg: `The ${exists.device} #${exists.number} is currently rented by ${exists.firstName} ${exists.lastName} ${exists.secondLastName} from ${exists.grade} since ${rentedDevice.date} at ${rentedDevice.time} and with the following conditions: ${rentedDevice.comments}.`,
     });
   }
 });
@@ -444,6 +449,32 @@ devices.get('/rented', function (req, res) {
       // The data is sent via the created object to frontend.
       data = activeOnes;
       res.send({ status: 'ok', msg: 'Info found', data });
+    }
+  });
+});
+
+/**
+ * 5A)
+ * Name : Check devices rented
+ * Method : GET
+ * Route : /rented-devices
+ * Description : The client will have all of the information regarding the devices rented from the devices db
+ */
+
+devices.get('/rented-devices', function (req, res) {
+  let devicesRented = {};
+
+  // A search for all the users who have a rented device is done in the communities collection.
+  DeviceModel.find({ available: false }, function (error, rentedOnes) {
+    if (error) {
+      res.send({
+        status: 'Error',
+        msg: 'No se pudo establecer una conexión a base de datos.',
+      });
+    } else {
+      // The data is sent via the created object to frontend.
+      devicesRented = rentedOnes;
+      res.send({ status: 'ok', msg: 'Info found', devicesRented });
     }
   });
 });
@@ -522,6 +553,43 @@ devices.get('/rented_all_time', function (req, res) {
       res.send({ status: 'ok', msg: 'Info found', data });
     }
   });
+});
+
+/**
+ * 9)
+ * Name : Get list of available devices
+ * Method : GET
+ * Route : /available
+ * Description : This route lets the frontend application display how many devices have been rented so far.
+ */
+devices.get('/available', async function (req, res) {
+  // An object is initialized.
+  // let ipads = {};
+  // let chromebooks = {};
+
+  // Inside the records
+  const availableIpads = await DeviceModel.find({
+    available: true,
+    device: 'iPad',
+  });
+  const availableChromebooks = await DeviceModel.find({
+    available: true,
+    device: 'ChromeBook',
+  });
+
+  if (availableIpads.length === 0 || availableChromebooks.length === 0) {
+    res.send({
+      status: 'Error',
+      msg: 'A connection to database could not be established.',
+    });
+  } else {
+    res.send({
+      status: 'ok',
+      msg: 'Info found',
+      availableChromebooks,
+      availableIpads,
+    });
+  }
 });
 
 exports.devices = devices;

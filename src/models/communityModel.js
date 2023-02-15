@@ -44,6 +44,15 @@ const communitySchema = new Schema(
       default: ['none'],
       required: true,
     },
+    rentedBook: {
+      type: 'boolean',
+      default: false,
+      required: false,
+    },
+    dueDate: {
+      type: 'string',
+      required: false,
+    },
     blocked: {
       type: 'boolean',
       required: true,
@@ -51,6 +60,14 @@ const communitySchema = new Schema(
     libraryFine: {
       type: 'boolean',
       required: true,
+    },
+    date: {
+      type: 'string',
+      required: false,
+    },
+    time: {
+      type: 'string',
+      required: false,
     },
   },
   {

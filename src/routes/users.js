@@ -21,18 +21,17 @@ function sendEmail(emailList, msg) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'mariogomez@britishschool.edu.co',
+      user: 'kc@britishschool.edu.co',
       pass: `${process.env.password}`,
     },
   });
 
   const mailOptions = {
-    from: 'mariogomez@britishschool.edu.co',
+    from: 'kc@britishschool.edu.co',
     to: emailList,
     subject: 'Knowledge Centre Notification',
     text:
-      msg +
-      '\n\nAtentamente,\n\nMario Andres Gomez Vargas\nIntegrador de Tecnología\nBritish International School',
+      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
   };
 
   transporter.sendMail(mailOptions, function (error, info) {

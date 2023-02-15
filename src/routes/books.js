@@ -6,18 +6,18 @@ const { communityModel } = require('../models/communityModel');
 const { BookModel } = require('../models/bookModel');
 const nodemailer = require('nodemailer');
 
-const mockData = [
-  {
-    title: 'The Adventures of Captain Underpants.',
-    author: 'Dav Pilkey',
-    year: '1997',
-  },
-  {
-    title: 'Sisters',
-    author: 'Raina Telgemeier',
-    year: '2014',
-  },
-];
+// const mockData = [
+//   {
+//     title: 'The Adventures of Captain Underpants.',
+//     author: 'Dav Pilkey',
+//     year: '1997',
+//   },
+//   {
+//     title: 'Sisters',
+//     author: 'Raina Telgemeier',
+//     year: '2014',
+//   },
+// ];
 
 /**
  * X) Function date
@@ -86,19 +86,18 @@ function sendEmail(emailList, msg) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'mariogomez@britishschool.edu.co',
+      user: 'kc@britishschool.edu.co',
       pass: `${process.env.password}`,
     },
   });
 
   // All the information that goes in the email is written here.
   const mailOptions = {
-    from: 'mariogomez@britishschool.edu.co',
+    from: 'kc@britishschool.edu.co',
     to: emailList,
     subject: 'Knowledge Centre Notification',
     text:
-      msg +
-      '\n\nMario Andres Gomez Vargas\nIntegrador de Tecnología\nBritish International School',
+      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
   };
 
   // The email is sent
@@ -120,7 +119,16 @@ function sendEmail(emailList, msg) {
  */
 books.post('/rent', async function (req, res) {
   // Document and barcode json come from frontend
-  const { document, barcode } = req.body;
+  const { document, barcode, dueDate } = req.body;
+
+  // console.log(dueDate);
+  // Se separan los datos según el formato que trae la fecha XX-XX-XXXX
+  const dateArr = dueDate.split('-');
+  // Se revisa que la separación se haya realizado correctamente
+  // console.log(dateArr);
+  // Se crea una nueva string con el formato utilizado para las fechas.
+  const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
+  // console.log(fixedDate);
 
   // Then the code checks if both the user and book exist.
   const userExists = await communityModel.findOne({ code: parseInt(document) });
@@ -137,10 +145,7 @@ books.post('/rent', async function (req, res) {
   } else if (userExists.libraryFine) {
     status = 'Error';
     msg = 'User has a fine that needs to be paid.';
-  } else if (
-    userExists.books[0] !== 'none' ||
-    userExists.books[0] !== ['none']
-  ) {
+  } else if (userExists.rentedBook === true) {
     status = 'Error';
     msg = 'The user currently has a book rented.';
   } else if (!bookExists) {
@@ -161,10 +166,10 @@ books.post('/rent', async function (req, res) {
     });
     await communityModel.updateOne(
       { code: parseInt(document) },
-      { $set: { books: [bookToRent] } }
+      { $set: { books: [bookToRent], rentedBook: true, dueDate: fixedDate } }
     );
     updateRecords(userExists, 'RENT', bookExists);
-    const message = `Dear user, \nYou have rented the book ${bookExists.title} today. Please remember to return it on time.\nThanks for using our service.\nRegards,`;
+    const message = `Dear user, \nYou have rented the book ${bookExists.title} today. Please remember to return it by ${fixedDate}.\nThanks for using our service.\nRegards,`;
     sendEmail(userExists.email, message);
     status = 'Ok';
     msg = 'Book rented successfully.';
@@ -200,6 +205,8 @@ books.post('/return', async function (req, res) {
       {
         $set: {
           books: ['none'],
+          rentedBook: false,
+          dueDate: '',
         },
       }
     );
@@ -303,7 +310,7 @@ books.post('/getBook', async (req, res) => {
 
 /**
  * 6)
- * Name : Create a new bok
+ * Name : Create a new book
  * Method : POST
  * Route : /newBook
  * Description : This route receives all of the new book's information from client side and creates a new entry in the collection.
@@ -353,18 +360,122 @@ books.post('/new-book', async (req, res) => {
       });
     });
   }
+});
 
-  // The book is searched in the data base.
-  // const bookExists = await BookModel.find({ barcode: requestedBarcode });
+/**
+ * 7)
+ * Name : Update existing Book
+ * Method : POST
+ * Route : /update
+ * Description : This route receives all of the new book's information from client side and creates a new entry in the collection.
+ */
+books.post('/update', async (req, res) => {
+  // The book to be added to database comes from client side as an object.
+  const { book } = req.body;
 
-  // if (!bookExists) {
-  //   res.send({
-  //     status: 'Error',
-  //     msg: `There is no entry for the barcode ${barcode} registered in our database.`,
-  //   });
-  // } else {
-  //   res.send({ status: 'ok', msg: 'Book was found.', bookExists });
-  // }
+  //
+  const bookExists = await BookModel.findOne({
+    barcode: book.barcode.toUpperCase(),
+  });
+
+  console.log(bookExists);
+
+  if (!bookExists) {
+    res.send({
+      status: 'Error',
+      msg: `The requested book does not appear in our database. If you believe this is a mistake, please contact ICT Support.`,
+    });
+  } else {
+    console.log(book);
+    await BookModel.updateOne(
+      { barcode: book.barcode.toUpperCase() },
+      {
+        $set: {
+          title: book.title,
+          author: book.author,
+          barcode: book.barcode,
+          publicationYear: book.publicationYear,
+          isbn: book.isbn,
+          price: book.price,
+          materialType: book.materialType,
+          sublocation: book.sublocation,
+          vendor: book.vendor,
+          circulationType: book.circulationType,
+          dewey: book.dewey,
+          condition: book.condition,
+          dateRented: 'none',
+          available: true,
+        },
+      }
+    );
+    console.log('Book was updated');
+    res.send({
+      status: 'ok',
+      msg: 'Book was updated successfully. Please load the book again to check!',
+    });
+  }
+});
+
+/**
+ * 8)
+ * Name : Delete book from database
+ * Method : POST
+ * Route : /delete
+ * Description : This route will eliminate the book from the database. The client sends a barcode and after many confirmations, decides to delete this book.
+ */
+books.post('/delete', async (req, res) => {
+  // The book to be added to database comes from client side as an object.
+  const { barcode } = req.body;
+
+  const bookToDeleteBarcode = barcode;
+
+  //
+  const bookExists = await BookModel.findOne({
+    barcode: bookToDeleteBarcode.toUpperCase(),
+  });
+
+  console.log(bookExists);
+
+  if (!bookExists) {
+    res.send({
+      status: 'Error',
+      msg: `The requested book does not appear in our database. If you believe this is a mistake, please contact ICT Support.`,
+    });
+  } else {
+    await BookModel.deleteOne({ barcode: bookExists.barcode });
+    console.log('Book was deleted');
+    res.send({
+      status: 'ok',
+      msg: 'Book was deleted successfully. So sad to hear that book has gone away 😢',
+    });
+  }
+});
+
+/**
+ * 9)
+ * Name : Send notifications to one user
+ * Method : POST
+ * Route : /notification
+ * Description : The purpose of this route is to send an email notification to a specific person, that the user decides via frontend.
+ */
+books.post('/notification', function (req, res) {
+  // The recipient´s information is received via an object that comes from frontend.
+  const { user } = req.body;
+
+  // We extract the email from the object.
+  const email = user.email;
+
+  console.log(user.books[0].title);
+
+  // The text that is going to be sent, is written in prior hand.
+  const mailText = `Dear ${user.name},\nYou have the book ${user.title} from the library currently rented. Please return it to the Knowledge Centre by the end of day.\nThank you very much!`;
+
+  // We use the sendEmail function adding the email as first param and the text as the second param. A message indicating that everything worked is sent to Frontend.
+  sendEmail(email, mailText);
+  res.send({
+    status: 'ok',
+    msg: 'The user was notified by email.',
+  });
 });
 
 /** Routes to create
