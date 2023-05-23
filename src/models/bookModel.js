@@ -1,6 +1,10 @@
 const { model, Schema } = require('mongoose');
 
 const bookSchema = new Schema({
+  userDocument: {
+    type: 'number',
+    required: true,
+  },
   title: {
     type: 'string',
     required: true,
@@ -47,9 +51,11 @@ const bookSchema = new Schema({
   },
   dateRented: {
     type: 'string',
-    required: true,
   },
-  condition: {
+  dateReturned: {
+    type: 'string',
+  },
+  conditions: {
     type: 'string',
     required: true,
   },
@@ -57,6 +63,27 @@ const bookSchema = new Schema({
     type: 'string',
     required: true,
   },
+  rentalHistory: [
+    {
+      userDocument: {
+        type: 'number',
+        ref: 'User',
+        required: true,
+      },
+      dueDate: {
+        type: 'string',
+      },
+      dateRented: {
+        type: 'string',
+      },
+      dateReturned: {
+        type: 'string',
+      },
+      conditions: {
+        type: 'string',
+      },
+    },
+  ],
 });
 
 const BookModel = model('book', bookSchema);

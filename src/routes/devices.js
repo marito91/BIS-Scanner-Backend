@@ -1,8 +1,7 @@
 const { Router } = require('express');
 const devices = Router();
-const { RecordModel } = require('../models/recordModel');
-const { communityModel } = require('../models/communityModel');
 const { DeviceModel } = require('../models/deviceModel');
+const { UserModel } = require('../models/userModel');
 const nodemailer = require('nodemailer');
 
 /**
@@ -11,172 +10,6 @@ const nodemailer = require('nodemailer');
  * communityModel will be used to manage all of the school's users, EntryModel to register every movement, and DeviceModel to manage each device.
  * Nodemailer is used as a mail manager to send notifications to users.
  */
-
-/**
- * X) Function date
- * Name : Get current date and time
- * METHOD : Local
- * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
- */
-
-function getDateTime() {
-  let today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
-  const yyyy = today.getFullYear();
-  const h = String(today.getHours());
-  const m = String(today.getMinutes()).padStart(2, '0');
-
-  today = mm + '/' + dd + '/' + yyyy;
-  // Saca hora actual
-  const time = h + ':' + m;
-
-  return [today, time];
-}
-
-/**
- * X) Function Overwrite
- * Name : Overwrite rented device
- * METHOD : Database connected
- * Params : Receives student document, device type, device number and current date
- * Description : This function updates a user by assigning the device brought from Front end and changing the active state to true. The function also updates the information in devices collection.
- */
-
-function overwrite(user) {
-  // First it looks for the entry that's going to be updated by document (code : document)
-  communityModel.updateOne(
-    { code: user.document },
-    // Since the user is proved to exist before calling this function, it will immediately set the new information that's going to be applied.
-    {
-      $set: {
-        device: user.device,
-        number: user.number,
-        active: true,
-        date: getDateTime()[0],
-        time: getDateTime()[1],
-      },
-    },
-    function (error) {
-      // If there is an error, then a message will be sent
-      if (error) {
-        console.log(
-          'Renting could not be registered. Error in overwriting. Please contact support.'
-        );
-        // res.send({
-        //   estado: 'error',
-        //   msg: 'Renting could not be registered. Error in overwriting. Please contact support.',
-        // });
-      }
-    }
-  );
-  // This function will also search for the device in the devices collection. Device type and number need to be the same so that changes are applied.
-  DeviceModel.updateOne(
-    { device: user.device, number: user.number, available: true },
-    // After validating device and number, and if it is available, the entry will be updated.
-    {
-      $set: {
-        date: getDateTime()[0],
-        time: getDateTime()[1],
-        available: false,
-        comments: user.comments,
-        user: user.document,
-      },
-    },
-    function (error) {
-      // If there is an error, a message will be sent to front end.
-      if (error) {
-        console.log(
-          'Renting could not be registered. Error in overwriting. Please contact support.'
-        );
-        // res.send({
-        //   estado: 'error',
-        //   msg: 'Renting could not be registered. Error in overwriting. Please contact support.',
-        // });
-      }
-    }
-  );
-}
-
-/**
- * X) Function returnDevice
- * Name : Return rented device
- * METHOD : Database connected
- * Params : Receives device type, device number and current date
- * Description : This function looks for the user in the communities collection and updates the information regarding the device rented. The devices collection is also updated.
- */
-
-function returnDevice(dev, num) {
-  // First, it searches for the user that's going to be updated (device: dev, number: num)
-  communityModel.updateOne(
-    { device: dev, number: num },
-    // After finding the active user, it sets the new information for the entry found.
-    {
-      $set: {
-        device: 'none',
-        number: 0,
-        active: false,
-      },
-    },
-    function (error) {
-      // If there is an error, it sends a message to front end to contact support.
-      if (error) {
-        console.log('There was an error updating the communities collection.');
-      }
-    }
-  );
-  // It searches for the device to be returned in the devices collection. (It updates it to available again.)
-  DeviceModel.updateOne(
-    { device: dev, number: num },
-    // After finding the entry, it sets the new information.
-    {
-      $set: {
-        date: 'none',
-        time: 'none',
-        available: true,
-        comments: 'none',
-        user: 0,
-      },
-    },
-    function (error) {
-      // If there is an error, it sends a message to front end to contact support.
-      if (error) {
-        console.log('There was an error updating the devices collection.');
-      }
-    }
-  );
-}
-
-/**
- * X) Function updateRecords
- * Name : Register new record
- * METHOD : Database connected
- * Params: Receives all info for later checking
- * Purpose: Registers a new entry everytime something is done in the application. Creates a history of processes.
- */
-function updateRecords(existingUser, dev, num, movement, bookInfo) {
-  const newRecord = new RecordModel({
-    document: existingUser.code,
-    firstName: existingUser.firstName,
-    lastName: existingUser.lastName,
-    secondLastName: existingUser.secondLastName,
-    grade: existingUser.grade,
-    email: existingUser.email,
-    device: dev,
-    number: num,
-    date: getDateTime()[0],
-    time: getDateTime()[1],
-    book: bookInfo,
-    type: movement,
-  });
-  newRecord.save(function (error) {
-    if (error) {
-      console.log(error);
-      console.log('Could not register a new record.');
-    } else {
-      console.log('New record registered.');
-    }
-  });
-}
 
 /**
  * X)
@@ -216,6 +49,29 @@ function sendEmail(emailList, msg) {
 }
 
 /**
+ * X) Function date
+ * Name : Get current date and time
+ * METHOD : Local
+ * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
+ */
+
+function getDateAndTime() {
+  let today = new Date();
+  const dd = String(today.getDate()).padStart(2, '0');
+  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+  const yyyy = today.getFullYear();
+  const h = String(today.getHours());
+  const m = String(today.getMinutes()).padStart(2, '0');
+
+  // Gets current date in mm/dd/yyyy format
+  today = mm + '/' + dd + '/' + yyyy;
+  // Gets current time
+  const time = h + ':' + m;
+
+  return [today, time];
+}
+
+/**
  * 1)
  * Name : Rent devices
  * Method : POST
@@ -223,67 +79,92 @@ function sendEmail(emailList, msg) {
  * Description : This route is going to manage the rent of devices. Information from the user is going to come from frontend and the device will be registered as rented with all of its implications in the corresponding collections.
  */
 devices.post('/rent', async function (req, res) {
-  // Information comes from frontend as a json object called user. This object contains the following information:
-  /**
-   * document
-   * device
-   * number
-   * name
-   * section
-   * date
-   * time
-   * email
-   * comments
-   */
   const { user } = req.body;
 
-  // The object's device and number keys are destructured in differente variables.
-  const [device, number] = [user.device, user.number];
-
-  // There's a search done in the communities collection to check if the user exists.
-  const exists = await communityModel.findOne({
-    code: parseInt(user.document),
-  });
-
-  // We also check if the device is already rented or not in the devices collection.
-  const isRented = await DeviceModel.findOne({
-    device: user.device,
-    number: user.number,
-  });
-
-  // If the user doesn't exist in database, we send a message indicating that the user is not available to use the service since it is not part of the database.
-  if (!exists) {
+  // First the user input needs to be validated to check that the object contains all necessary info.
+  if (!user || !user.document || !user.device || !user.number) {
     res.send({
-      status: 'error',
-      msg: `The user ${user.document} is not registered in our Database.`,
+      status: 'Error',
+      msg: 'Invalid user input. Please check all the fields and try again.',
     });
-    // If the user exists, then we check if it has a device rented already.
+  }
+  // Then it checks if the user exists
+  const userExists = await UserModel.findOne({
+    document: Number(user.document),
+  });
+  // If the user doesn't exist, then the client is notified on its side.
+  if (!userExists) {
+    res.send({
+      status: 'Error',
+      msg: `The ${user.document} doesn't seem to appear in our database.`,
+    });
+    // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
+  } else if (userExists.hasDeviceRented) {
+    res.send({
+      status: 'Error',
+      msg: `The user ${userExists.name} ${userExists.lastName} with document ${userExists.document} currently has a device rented.`,
+    });
   } else {
-    // If the user has a rented device, we send a message to frontend indicating that the device the person has rented needs to be returned first. (The message contains the device and number)
-    if (exists.active) {
+    // After that, the requested device is searched in the database collection.
+    const requestedDevice = await DeviceModel.findOne({
+      deviceType: user.device,
+      deviceNumber: Number(user.number),
+    });
+    // If the device is not available, then the client is notified in its side.
+    if (
+      requestedDevice.available === null ||
+      requestedDevice.available === undefined ||
+      !requestedDevice.available
+    ) {
       res.send({
         status: 'Error',
-        msg: `The user ${exists.firstName} ${exists.lastName} with document ${
-          exists.code
-        } currently has the device ${exists.device} #${
-          exists.number
-        } rented since ${isRented ? isRented.date : 'NO DATE FOUND'}.`,
+        msg: `The ${user.device} ${user.number} doesn't seem to be available for rent in this moment.`,
       });
     } else {
-      // If the device requested is already rented (which should not happen as it is available physically), a message will be sent to front end requiring to choose another device.
-      if (!isRented.available) {
-        res.send({
-          status: 'Error',
-          msg: `The ${user.device} #${user.number} is currently rented. Please select an available device.`,
-        });
-      } else {
-        // If all conditions are met and validated, we proceed to register a new record (updateRecords function), assign the device to the requested user (overwrite function) and send the email notification (sendEmail function) with the corresponding message.
-        overwrite(user);
-        updateRecords(exists, device, parseInt(number), 'RENT', ['none']);
-        const message = `Dear user,\nYou have rented the ${device} #${number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
-        sendEmail(exists.email, message);
-        res.send({ estado: 'ok', msg: 'Device rented successfully.' });
-      }
+      // If instead, it is available, then the device is updated in the devices collection
+      await DeviceModel.updateOne(
+        {
+          deviceType: user.device,
+          deviceNumber: Number(user.number),
+        },
+        {
+          $set: {
+            dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+            dateReturned: null,
+            available: false,
+            conditions: user.conditions,
+            userDocument: user.document,
+          },
+          $push: {
+            rentalHistory: {
+              userDocument: user.document,
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              dateReturned: null,
+              conditions: user.conditions,
+            },
+          },
+        }
+      );
+
+      // The user who is going to rent the device is also updated in the users collection.
+      await UserModel.updateOne(
+        { document: user.document },
+        {
+          $set: { hasDeviceRented: true },
+          $push: {
+            deviceHistory: {
+              device: user.device + ' ' + user.number,
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              dateReturned: null,
+              conditions: user.conditions,
+            },
+          },
+        }
+      );
+      // A confirmation message is declarated which will be then sent to the user who rents the device. Also a confirmation message is sent to client side.
+      const message = `Dear ${userExists.name} ${userExists.lastName},\nYou have rented the ${user.device} #${user.number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
+      sendEmail(userExists.email, message);
+      res.send({ status: 'OK', msg: 'Device rented successfully.' });
     }
   }
 });
@@ -298,49 +179,92 @@ devices.post('/rent', async function (req, res) {
 devices.post('/return', async function (req, res) {
   // The type of device and number are received from frontend.
   const { device, number } = req.body;
-  // We destructure the body and parse the number to int.
-  const [type, num] = [device, Number(number)];
-  // We check on console to see if the data was sent successfully.
-  console.log('Device: ' + type);
-  console.log('Number: ' + num);
 
-  // First we check, who has the device rented.
-  const exists = await communityModel.findOne({
-    device: type,
-    number: parseInt(num),
-  });
-
-  // Then we check if the device really is rented.
-  const rentedDevice = await DeviceModel.findOne({
-    device: type,
-    number: parseInt(num),
-  });
-
-  console.log(rentedDevice);
-
-  // If the device is rented, we check in what conditions it was done so.
-  const conditions = rentedDevice.comments;
-  console.log(conditions);
-
-  // If no one has the device rented, then a message is sent explaining that there are no active records with the requested data.
-  if (!exists) {
+  // First the user input needs to be validated to check that the necessary info is received.
+  if (!device || !number) {
     res.send({
-      status: 'error',
-      msg: `The ${type} #${num} was not found in our database.`,
+      status: 'Error',
+      msg: 'Invalid user input. Please check that device type and number are entered correctly and try again.',
     });
-    // If, instead, all conditions are met and validations are ok, we proceed to return the device with the function returnDevice().
   } else {
-    const message = `Dear user,\nYou returned the ${type} #${num} to the Knowledge Centre successfully. Thank you for using our service.`;
-    returnDevice(type, parseInt(num));
-    //  Since this is also a new record, we need to register a new entry in the records collection and send an email to the person that returned the device.
-    updateRecords(exists, device, parseInt(number), 'RETURN', ['none']);
-    // The email is sent the person who returned the device followed by the message written above.
-    sendEmail(exists.email, message);
-    res.send({
-      estado: 'ok',
-      msg: `The ${exists.device} #${exists.number} rented by ${exists.firstName} ${exists.lastName} was returned successfully.`,
-      conditions,
+    // If inputs are ok, then the device is searched in its respective collection.
+    const rentedDevice = await DeviceModel.findOne({
+      deviceType: device,
+      deviceNumber: Number(number),
     });
+    // If the device is not found in the collection, then a message is sent explaining that there are no active records with the requested data.
+    if (!rentedDevice) {
+      res.send({
+        status: 'Error',
+        msg: `The ${device} #${number} was not found in our database.`,
+      });
+    } else if (rentedDevice.available) {
+      // If the device is available, then it means that it was not registered as rented in first place so a message is sent to client.
+      res.send({
+        status: 'Error',
+        msg: `The ${device} #${number} does not seem to register as rented in the database.`,
+      });
+    } else {
+      // If, instead, all conditions are met and validations are ok, we proceed to return the device. To do this, the user that has the device rented is stored in a variable to be used later.
+      const userThatRented = await UserModel.findOne({
+        document: rentedDevice.userDocument,
+      });
+      // Its existence needs to be validated first. If it does not exist then a message is sent to client.
+      if (!userThatRented) {
+        res.send({
+          status: 'Error',
+          msg: `The user was not found in our database.`,
+        });
+      } else {
+        // After validating everything we update the user in the users collection. (It sets the hasDeviceRented to false and pushes the necessary information into the deviceHistory array.)
+        await UserModel.updateOne(
+          { document: rentedDevice.userDocument },
+          {
+            $set: { hasDeviceRented: false },
+            $push: {
+              deviceHistory: {
+                device: device + ' ' + number,
+                dateRented: null,
+                dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                conditions: null,
+              },
+            },
+          }
+        );
+        // We also update the device to be returned in the devices collection. (It updates it to available again and pushes the necessary information in the rentalHistory array.)
+        await DeviceModel.updateOne(
+          { deviceType: device, deviceNumber: Number(number) },
+          {
+            $set: {
+              available: true,
+              conditions: 'none',
+              userDocument: 0,
+              dateRented: null,
+              dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+            },
+            $push: {
+              rentalHistory: {
+                userDocument: userThatRented.document,
+                dateRented: null,
+                dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                conditions: userThatRented.conditions,
+              },
+            },
+          }
+        );
+
+        // Conditions of how the device rented was given in are stated.
+        const conditions = rentedDevice.conditions;
+        // The message to be sent to the user by email is stated.
+        const message = `Dear user,\nYou returned the ${device} #${number} to the Knowledge Centre successfully. Thank you for using our service.`;
+        // The email is sent the person who returned the device followed by the message written above. That's why the userThatRented object is taken from the collection.
+        sendEmail(userThatRented.email, message);
+        res.send({
+          status: 'OK',
+          msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully. If the device was not returned with the following conditions: ${conditions}, please follow the due process.`,
+        });
+      }
+    }
   }
 });
 
@@ -352,79 +276,149 @@ devices.post('/return', async function (req, res) {
  * Description : This route will work as a active device searcher, letting the user in front end know, who has a certain device or if it is not rented.
  */
 devices.post('/search', async function (req, res) {
+  // Checks that the request body is not empty
+  if (
+    !req.body ||
+    !req.body.searchInfo ||
+    !req.body.searchInfo.device ||
+    !req.body.searchInfo.number
+  ) {
+    res.status(400).send({
+      status: 'Error',
+      msg: 'The information is missing. Please make sure to check all fields. Device type and number should be input.',
+    });
+    return;
+  }
+
+  // Checks that the device and number properties are of the correct type
+  if (
+    typeof req.body.searchInfo.device !== 'string' ||
+    typeof req.body.searchInfo.number !== 'number'
+  ) {
+    res.status(400).send({
+      status: 'Error',
+      msg: 'Invalid data type for device type or number',
+    });
+    return;
+  }
+
   // An object from frontend with the required search information is received
   const { searchInfo } = req.body;
 
-  // The object's keys are destructured
-  const [type, num] = [searchInfo.device, searchInfo.number];
-
-  // With the key's values destructured, an entry is searched in the communities collection to check if it exists.
-  const exists = await communityModel.findOne({
-    device: type,
-    number: parseInt(num),
-  });
-
   const rentedDevice = await DeviceModel.findOne({
-    device: type,
-    number: parseInt(num),
+    device: searchInfo.device,
+    number: Number(searchInfo.number),
   });
 
   // If entry doesn't exist a message is sent to frontend saying that a device was not found and that it is not rented in this moment.
   if (!rentedDevice) {
     res.send({
-      status: 'error',
-      msg: `The ${type} #${num} is not rented in this moment.`,
+      status: 'Error',
+      msg: `The ${searchInfo.device} #${searchInfo.number} is not rented in this moment.`,
     });
-    // if a record is found, then a message saying which one and who has it is sent to frontend.
+    // if a record is found, then a we search for the user in the users collection and send a message saying who's the user sent to frontend.
   } else {
+    // With the key's values destructured, an entry is searched in the communities collection to check if it exists.
+    const exists = await UserModel.findOne({
+      document: rentedDevice.userDocument,
+    });
     res.send({
-      estado: 'ok',
-      msg: `The ${exists.device} #${exists.number} is currently rented by ${exists.firstName} ${exists.lastName} ${exists.secondLastName} from ${exists.grade} since ${rentedDevice.date} at ${rentedDevice.time} and with the following conditions: ${rentedDevice.comments}.`,
+      status: 'OK',
+      msg: `The ${rentedDevice.device} #${rentedDevice.number} is currently rented by ${exists.name} ${exists.lastName} from ${exists.grade} since ${rentedDevice.dateRented} and with the following conditions: ${rentedDevice.conditions}.`,
     });
   }
 });
 
 /**
- * 4a)
- * Name : Get Records by Document
+ * 4)
+ * Name : Get usage history
  * Method : POST
  * Route : /entries
- * Description : This route lets the user collect and retrieve information from the record history by using the document filter. This will let admins know the statistics of the application usage.
+ * Description : This route lets the user collect and retrieve information from the record history by using different filters. This will let admins know the statistics of the application usage.
  */
-devices.post('/entries/document', async function (req, res) {
-  // Se recibe la información del frontend
+devices.post('/entries', async function (req, res) {
   const { searchInfo } = req.body;
-  const data = await RecordModel.find({
-    document: parseInt(searchInfo.document),
-  });
+  // First we check if the searchInfo object coming from frontend exists.
+  if (Object.keys(searchInfo).length === 0) {
+    return res.status(400).send({
+      status: 'Error',
+      msg: 'The fields must be ',
+    });
+    // If it does then we proceed to run the following code:
+  } else {
+    // We create some let variables to update depending on the switch case that runs next.
+    let data;
+    let userHistory;
+    let deviceHistory;
+    let dateArr;
+    let fixedDate;
+    // let userDates;
+    // let deviceDates;
+    switch (true) {
+      // If the desired information is the from the user document then we search for the user in the Users collection.
+      case searchInfo.document !== null:
+        userHistory = await UserModel.findOne({
+          document: searchInfo.document,
+        });
+        // We reassign the data array with the deviceHistory info so that it is sent to client.
+        data = userHistory.deviceHistory;
+        break;
+      case searchInfo.date !== null:
+        console.log(searchInfo.date);
+        // Se separan los datos según el formato que trae la fecha XX-XX-XXXX
+        dateArr = searchInfo.date.split('-');
+        // Se revisa que la separación se haya realizado correctamente
+        console.log(dateArr);
+        // Se crea una nueva string con el formato utilizado para las fechas.
+        fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
+        console.log(fixedDate);
+        res.send({
+          status: 'Error',
+          msg: 'Date format not available in this moment.',
+          data,
+        });
+        return;
+      // deviceDates = await DeviceModel.find({
+      //   rentalHistory: {
+      //     $elemMatch: {
+      //       $or: [
+      //         { dateRented: searchInfo.date },
+      //         { dateReturned: searchInfo.date },
+      //       ],
+      //     },
+      //   },
+      // });
+      // userDates = await UserModel.find({
+      //   deviceHistory: {
+      //     $elemMatch: {
+      //       $or: [
+      //         { dateRented: searchInfo.date },
+      //         { dateReturned: searchInfo.date },
+      //       ],
+      //     },
+      //   },
+      // });
+      // console.log(deviceDates);
+      // console.log(userDates);
+      // break;
+      // If the desired information is for a certain device, then we search for it in the devices collection.
+      case searchInfo.device !== null || searchInfo.number !== 0:
+        deviceHistory = await DeviceModel.findOne({
+          deviceType: searchInfo.device,
+          deviceNumber: searchInfo.number,
+        });
+        // We reassign the data array with the rentalHistory info so that it is sent to client.
+        data = deviceHistory.rentalHistory;
+        break;
+      default:
+        data = [];
+        break;
+    }
 
-  res.send({ status: 'ok', msg: 'Info found', data });
-});
+    // console.log(data);
 
-/**
- * 4b)
- * Name : Get Records by date
- * Method : POST
- * Route : /entries
- * Description : This route lets the user collect and retrieve information from the record history by using the date filter. This will let admins know the statistics of the application usage.
- */
-devices.post('/entries/date', async function (req, res) {
-  // Se recibe la información del frontend
-  const { searchInfo } = req.body;
-  const dat = searchInfo.date;
-  // Se verifica como se recibe la fecha
-  console.log(dat);
-  // Se separan los datos según el formato que trae la fecha XX-XX-XXXX
-  const dateArr = dat.split('-');
-  // Se revisa que la separación se haya realizado correctamente
-  console.log(dateArr);
-  // Se crea una nueva string con el formato utilizado para las fechas.
-  const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
-  console.log(fixedDate);
-
-  const data = await RecordModel.find({ date: fixedDate });
-
-  res.send({ status: 'ok', msg: 'Info found', data });
+    res.send({ status: 'OK', msg: 'Entries found.', data });
+  }
 });
 
 /**
@@ -434,49 +428,48 @@ devices.post('/entries/date', async function (req, res) {
  * Route : /devices
  * Description : This route is going to send the list of rented devices so that they are being able to be displayed on frontend and are easily accesible to the users.
  */
-devices.get('/rented', function (req, res) {
-  // The data is initialized as an object.
-  let data = {};
-
-  // A search for all the users who have a rented device is done in the communities collection.
-  communityModel.find({ active: true }, function (error, activeOnes) {
-    if (error) {
-      res.send({
-        status: 'Error',
-        msg: 'No se pudo establecer una conexión a base de datos.',
-      });
-    } else {
-      // The data is sent via the created object to frontend.
-      data = activeOnes;
-      res.send({ status: 'ok', msg: 'Info found', data });
-    }
-  });
-});
-
-/**
- * 5A)
- * Name : Check devices rented
- * Method : GET
- * Route : /rented-devices
- * Description : The client will have all of the information regarding the devices rented from the devices db
- */
-
-devices.get('/rented-devices', function (req, res) {
-  let devicesRented = {};
-
-  // A search for all the users who have a rented device is done in the communities collection.
-  DeviceModel.find({ available: false }, function (error, rentedOnes) {
-    if (error) {
-      res.send({
-        status: 'Error',
-        msg: 'No se pudo establecer una conexión a base de datos.',
-      });
-    } else {
-      // The data is sent via the created object to frontend.
-      devicesRented = rentedOnes;
-      res.send({ status: 'ok', msg: 'Info found', devicesRented });
-    }
-  });
+devices.get('/rented', async function (req, res) {
+  // The list of rented devices and of actives users are assigned from their respectiv collections.
+  const rentedDevices = await DeviceModel.find({ available: false });
+  const activeOnes = await UserModel.find({ hasDeviceRented: true });
+  // If there are no active users, then an empty array is sent to front side
+  if (!activeOnes) {
+    const listOfRentedDevices = [];
+    res.status(500).send({
+      status: 'OK',
+      msg: 'There are no rented devices to be fetched.',
+      listOfRentedDevices,
+    });
+    // If there are active devices the
+  } else {
+    const listOfRentedDevices = await activeOnes.map((user) => {
+      const deviceExists = rentedDevices.find(
+        (device) => device.userDocument === user.document
+      );
+      if (deviceExists) {
+        // console.log(deviceExists.dateRented);
+        const activeUser = {
+          ...user._doc, // copy all properties of the user object
+          device: deviceExists.deviceType,
+          number: deviceExists.deviceNumber,
+          conditions: deviceExists.conditions,
+          // We take the last element of the rentalhistory array and grab the dateRented by converting it to isoString and taking only the date.
+          date: deviceExists.dateRented,
+          // .toISOString()
+          // .substring(0, 10)
+          // .split('-')
+          // .reverse()
+          // .join('/'),
+          // time: deviceExists.dateRented.toISOString().substring(11, 19),
+          // time: deviceExists.dateRented,
+        };
+        return activeUser;
+      }
+      return user;
+    });
+    // console.log(listOfRentedDevices);
+    res.send({ status: 'ok', msg: 'Info found', listOfRentedDevices });
+  }
 });
 
 /**
@@ -487,8 +480,14 @@ devices.get('/rented-devices', function (req, res) {
  * Description : The purpose of this route is to send an email notification to a specific person, that the user decides via frontend.
  */
 devices.post('/notification', function (req, res) {
-  // The recipient´s information is received via an object that comes from frontend.
+  // Validate the request body
   const { user } = req.body;
+  if (!user || !user.email || !user.name) {
+    return res.status(400).send({
+      status: 'Error',
+      msg: 'Invalid request body. Please provide a user object with email and name properties',
+    });
+  }
 
   // We extract the email from the object.
   const email = user.email;
@@ -499,7 +498,7 @@ devices.post('/notification', function (req, res) {
   // We use the sendEmail function adding the email as first param and the text as the second param. A message indicating that everything worked is sent to Frontend.
   sendEmail(email, mailText);
   res.send({
-    status: 'ok',
+    status: 'OK',
     msg: 'The user was notified by email.',
   });
 });
@@ -525,7 +524,7 @@ devices.post('/notification_all', function (req, res) {
   // The function sendEmail is used with the email list as first param and the text as second param. A message is sent to frontend notifying that everything worked.
   sendEmail(emails, mailText);
   res.send({
-    status: 'ok',
+    status: 'OK',
     msg: 'Notifications were sent to every user.',
   });
 });
@@ -537,22 +536,49 @@ devices.post('/notification_all', function (req, res) {
  * Route : /rented_all_time
  * Description : This route lets the frontend application display how many devices have been rented so far.
  */
-devices.get('/rented_all_time', function (req, res) {
+devices.get('/rented_all_time', async function (req, res) {
   // An object is initialized.
-  let data = {};
+  // let data = {};
 
-  // Inside the records
-  RecordModel.find({ type: 'RENT' }, function (error, rentedEntries) {
-    if (error) {
-      res.send({
-        status: 'Error',
-        msg: 'A connection to database could not be established.',
-      });
-    } else {
-      data = rentedEntries;
-      res.send({ status: 'ok', msg: 'Info found', data });
-    }
+  // const listOfRentedEntries = await DeviceModel.find({
+  //   'rentalHistory.0': { $exists: true },
+  // });
+
+  // // console.log(listOfRentedEntries.length);
+
+  // if (listOfRentedEntries.length === 0) {
+  //   res.send({
+  //     status: 'Error',
+  //     msg: 'Data of rented entries could not be loaded',
+  //     data,
+  //   });
+  // } else {
+  //   data = listOfRentedEntries;
+  //   res.send({ status: 'OK', msg: 'Info found', data });
+  // }
+
+  let data = [];
+  await DeviceModel.aggregate([
+    {
+      $unwind: '$rentalHistory',
+    },
+    {
+      $group: {
+        _id: '$deviceId',
+        totalRentals: { $sum: 1 },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalCount: { $sum: '$totalRentals' },
+      },
+    },
+  ]).then((results) => {
+    console.log('Total number of rentals:', results[0].totalCount);
+    data = results[0].totalCount;
   });
+  res.send({ status: 'OK', msg: 'Info found', data });
 });
 
 /**
@@ -563,29 +589,25 @@ devices.get('/rented_all_time', function (req, res) {
  * Description : This route lets the frontend application display how many devices have been rented so far.
  */
 devices.get('/available', async function (req, res) {
-  // An object is initialized.
-  // let ipads = {};
-  // let chromebooks = {};
-
   // Inside the records
   const availableIpads = await DeviceModel.find({
     available: true,
-    device: 'iPad',
+    deviceType: 'iPad',
   });
   const availableChromebooks = await DeviceModel.find({
     available: true,
-    device: 'ChromeBook',
+    deviceType: 'ChromeBook',
   });
 
   if (availableIpads.length === 0 || availableChromebooks.length === 0) {
     res.send({
       status: 'Error',
-      msg: 'A connection to database could not be established.',
+      msg: 'Availability information for devices could not be fetched from the database. Please contact ICT Support.',
     });
   } else {
     res.send({
-      status: 'ok',
-      msg: 'Info found',
+      status: 'OK',
+      msg: 'Availability information for all devices was found succesfully.',
       availableChromebooks,
       availableIpads,
     });

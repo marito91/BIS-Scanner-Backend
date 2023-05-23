@@ -172,7 +172,7 @@ users.post('/signup', function (req, res) {
           });
           newAdmin.save(function (error) {
             if (error) {
-              // console.log(error);
+              console.log(error);
               return res.send({
                 status: 'error',
                 msg: "Couldn't register new user to database",

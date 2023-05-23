@@ -1,8 +1,63 @@
 const { Router } = require('express');
 const books = Router();
-const { UserModel } = require('../models/userModel');
+// const { RecordModel } = require('../models/recordModel');
+// const { communityModel } = require('../models/communityModel');
 const { BookModel } = require('../models/bookModel');
 const nodemailer = require('nodemailer');
+
+/**
+ * X) Function date
+ * Name : Get current date and time
+ * METHOD : Local
+ * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
+ */
+
+function getDateTime() {
+  let today = new Date();
+  const dd = String(today.getDate()).padStart(2, '0');
+  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+  const yyyy = today.getFullYear();
+  const h = String(today.getHours());
+  const m = String(today.getMinutes()).padStart(2, '0');
+
+  today = mm + '/' + dd + '/' + yyyy;
+  // Saca hora actual
+  const time = h + ':' + m;
+
+  return [today, time];
+}
+
+/**
+ * X) Function updateRecords
+ * Name : Register new record
+ * METHOD : Database connected
+ * Params: Receives all info for later checking
+ * Purpose: Registers a new entry everytime something is done in the application. Creates a history of processes.
+ */
+function updateRecords(existingUser, movement, bookInfo) {
+  const newRecord = new RecordModel({
+    document: existingUser.code,
+    firstName: existingUser.firstName,
+    lastName: existingUser.lastName,
+    secondLastName: existingUser.secondLastName,
+    grade: existingUser.grade,
+    email: existingUser.email,
+    device: 'none',
+    number: 0,
+    date: getDateTime()[0],
+    time: getDateTime()[1],
+    book: bookInfo,
+    type: movement,
+  });
+  newRecord.save(function (error) {
+    if (error) {
+      console.log(error);
+      console.log('Could not register a new record.');
+    } else {
+      console.log('New record registered.');
+    }
+  });
+}
 
 /**
  * X)
@@ -42,28 +97,6 @@ function sendEmail(emailList, msg) {
 }
 
 /**
- * X) Function date
- * Name : Get current date and time
- * METHOD : Local
- * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
- */
-
-function getDateAndTime() {
-  let today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
-  const yyyy = today.getFullYear();
-  const h = String(today.getHours());
-  const m = String(today.getMinutes()).padStart(2, '0');
-
-  today = mm + '/' + dd + '/' + yyyy;
-  // Saca hora actual
-  const time = h + ':' + m;
-
-  return [today, time];
-}
-
-/**
  * 1)
  * Name : Rent books
  * Method : POST
@@ -74,23 +107,17 @@ books.post('/rent', async function (req, res) {
   // Document and barcode json come from frontend
   const { document, barcode, dueDate } = req.body;
 
-  if (!document || !barcode || !dueDate) {
-    res.send({
-      status: 'Error',
-      msg: 'Invalid user input. Please check all the fields and try again.',
-    });
-    return;
-  }
-
+  // console.log(dueDate);
   // Se separan los datos según el formato que trae la fecha XX-XX-XXXX
   const dateArr = dueDate.split('-');
   // Se revisa que la separación se haya realizado correctamente
-  console.log(dateArr);
+  // console.log(dateArr);
   // Se crea una nueva string con el formato utilizado para las fechas.
   const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
-  console.log(fixedDate);
+  // console.log(fixedDate);
+
   // Then the code checks if both the user and book exist.
-  const userExists = await UserModel.findOne({ document: Number(document) });
+  const userExists = await communityModel.findOne({ code: parseInt(document) });
   const bookExists = await BookModel.findOne({
     barcode: barcode.toUpperCase(),
   });
@@ -101,10 +128,10 @@ books.post('/rent', async function (req, res) {
   if (!userExists) {
     status = 'Error';
     msg = 'User does not exist.';
-  } else if (userExists.blocked) {
+  } else if (userExists.libraryFine) {
     status = 'Error';
     msg = 'User has a fine that needs to be paid.';
-  } else if (userExists.hasBookRented) {
+  } else if (userExists.rentedBook === true) {
     status = 'Error';
     msg = 'The user currently has a book rented.';
   } else if (!bookExists) {
@@ -114,45 +141,23 @@ books.post('/rent', async function (req, res) {
     status = 'Error';
     msg = 'This book is currently rented.';
   } else {
+    // HAY QUE ARREGLAR EL TEMA DE FECHA PARA QUE GUARDE LA FECHA EN LA QUE SE RENTA EL LIBRO Y SE GUARDA
+    // SALE MEJOR PONER EL USUARIO QUE RENTA EN LA COLECCION DE BOOKS PARA SOLAMENTE USAR ESA BASE COMO FUENTE DE INFORMACION
     await BookModel.updateOne(
-      { barcode },
-      {
-        $set: {
-          userDocument: Number(userExists.document),
-          available: false,
-          dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-        },
-        $push: {
-          rentalHistory: {
-            userDocument: Number(userExists.document),
-            dueDate: fixedDate,
-            dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-            dateReturned: null,
-            conditions: null,
-          },
-        },
-      }
+      { barcode: barcode.toUpperCase() },
+      { $set: { available: false, dateRented: getDateTime()[0] } }
     );
-    // Update user rental history
-    await UserModel.updateOne(
-      { document: Number(document) },
-      {
-        $set: { hasBookRented: true },
-        $push: {
-          bookHistory: {
-            barcode,
-            dueDate: fixedDate,
-            dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-            dateReturned: null,
-            conditions: null,
-          },
-        },
-      }
+    const bookToRent = await BookModel.findOne({
+      barcode: barcode.toUpperCase(),
+    });
+    await communityModel.updateOne(
+      { code: parseInt(document) },
+      { $set: { books: [bookToRent], rentedBook: true, dueDate: fixedDate } }
     );
-    // A message is stated to be sent to the client
-    const message = `Dear user, \nYou have rented the book ${bookExists.title} today. Please remember to return it by ${dueDate}.\nThanks for using our service.\nRegards,`;
+    updateRecords(userExists, 'RENT', bookExists);
+    const message = `Dear user, \nYou have rented the book ${bookExists.title} today. Please remember to return it by ${fixedDate}.\nThanks for using our service.\nRegards,`;
     sendEmail(userExists.email, message);
-    status = 'OK';
+    status = 'Ok';
     msg = 'Book rented successfully.';
   }
   res.send({ status, msg });
@@ -167,77 +172,47 @@ books.post('/rent', async function (req, res) {
 books.post('/return', async function (req, res) {
   const { barcode } = req.body;
 
-  // First we check if the barcode came from client side. If it didn't we send the msg to front and close the function.
-  if (!barcode) {
-    // console.log('There is no barcode');
+  if (barcode === null || barcode === undefined) {
+    console.log('There is no barcode');
     res.send({ status: 'Error', msg: 'Please enter a valid barcode' });
-    return;
-  }
-
-  // We have to check if the books exists in database first and it is indeed rented.
-  const bookExists = await BookModel.findOne({
-    barcode: barcode.toUpperCase(),
-    available: false,
-  });
-
-  const userThatHasBook = await UserModel.findOne({
-    document: bookExists.userDocument,
-  });
-
-  if (!bookExists) {
-    res.send({
-      status: 'Error',
-      msg: `We couldn't locate the book ${barcode} in the database.`,
-    });
   } else {
-    await UserModel.updateOne(
-      {
-        document: bookExists.userDocument,
-      },
-      {
-        $set: { hasBookRented: false },
-        $push: {
-          bookHistory: {
-            barcode,
-            dateRented: null,
-            dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-            conditions: null,
-          },
-        },
-      }
-    );
-    await BookModel.updateOne(
-      {
-        barcode: barcode.toUpperCase(),
-        available: false,
-      },
-      {
-        $set: {
-          userDocument: 0,
-          available: true,
-        },
-        $push: {
-          rentalHistory: {
-            userDocument: bookExists.userDocument,
-            dateRented: null,
-            dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-            duetDate:
-              bookExists.rentalHistory[bookExists.rentalHistory.length - 1],
-            conditions: 'none',
-          },
-        },
-      }
-    );
-
-    // A message declaration is stated to be sent via email to the user that returned the book.
-    const message = `Dear user, \nYou returned the book ${bookExists.title} today. \nThanks for using our service.\nRegards,`;
-    // The email is sent.
-    sendEmail(userThatHasBook.email, message);
-    // A message is sent to client side to determine that everything went ok.
-    res.send({
-      status: 'Ok',
-      msg: `The book ${bookExists.title} was returned by ${userThatHasBook.name} ${userThatHasBook.lastName} successfully.`,
+    const bookExists = await BookModel.findOne({
+      barcode: barcode.toUpperCase(),
     });
+
+    const userHasBook = await communityModel.findOne({
+      books: { $elemMatch: { barcode: bookExists.barcode } },
+    });
+
+    if (!userHasBook && bookExists) {
+      res.send({
+        status: 'Error',
+        msg: `This book does not appear as rented in our database.`,
+      });
+    } else {
+      await communityModel.updateOne(
+        { code: userHasBook.code },
+        {
+          $set: {
+            books: ['none'],
+            rentedBook: false,
+            dueDate: '',
+          },
+        }
+      );
+      await BookModel.updateOne(
+        { barcode: barcode.toUpperCase() },
+        { $set: { available: true, dateRented: '' } }
+      );
+
+      updateRecords(userHasBook, 'RETURN', bookExists);
+      const message = `Dear user, \nYou returned the book ${bookExists.title} today. \nThanks for using our service.\nRegards,`;
+      sendEmail(userHasBook.email, message);
+      res.send({
+        status: 'Ok',
+        msg: `The book ${bookExists.title} was returned by ${userHasBook.firstName} ${userHasBook.lastName} successfully.`,
+      });
+    }
   }
 });
 
@@ -248,54 +223,28 @@ books.post('/return', async function (req, res) {
  * Route : /rented
  * Description : This route lets the frontend application display how many devices have been rented so far.
  */
-books.get('/rented', async function (req, res) {
+books.get('/rented', function (req, res) {
   // An object is initialized.
-  let data = [];
+  let data = {};
 
   // Inside the records
-  const rentedBooks = await BookModel.find({ available: false });
-  const activeUsers = await UserModel.find({ hasBookRented: true });
-  if (!rentedBooks) {
-    res.send({
-      status: 'Error',
-      msg: 'Rented book could not be fetched from the DataBase.',
-    });
-  } else {
-    const listOfRentedBooks = await activeUsers.map((user) => {
-      const book = rentedBooks.find(
-        (book) => book.userDocument === user.document
-      );
-      if (book) {
-        // console.log(book.title);
-        return {
-          ...user._doc, // copy all properties of the user object
-          title: book.title,
-          author: book.author,
-          conditions: book.conditions,
-          // We take the last element of the rentalhistory array and grab the dateRented by converting it to isoString and taking only the date.
-          dateRented:
-            book.rentalHistory[book.rentalHistory.length - 1].dateRented,
-          // .toISOString()
-          // .substring(0, 10)
-          // .split('-')
-          // .reverse()
-          // .join('/'),
-          // time: book.rentalHistory[book.rentalHistory.length - 1].dateRented
-          //   .toISOString()
-          //   .substring(11, 19),
-        };
+  communityModel.find(
+    {
+      books: { $ne: ['none'] },
+    },
+    function (error, usersThatHaveBooks) {
+      if (error) {
+        res.send({
+          status: 'Error',
+          msg: 'A connection to database could not be established.',
+        });
+      } else {
+        data = usersThatHaveBooks;
+        // console.log(usersThatHaveBooks);
+        res.send({ status: 'ok', msg: 'Info found', data });
       }
-      return user;
-    });
-    // console.log(listOfRentedBooks);
-    data = listOfRentedBooks;
-    // console.log(data);
-    res.send({
-      status: 'OK',
-      msg: 'Rented books fetched succesfully',
-      data,
-    });
-  }
+    }
+  );
 });
 
 /**
@@ -335,11 +284,11 @@ books.post('/getBook', async (req, res) => {
   // The barcode requested comes from client side.
   const { barcode } = req.body;
   const requestedBarcode = barcode.toUpperCase();
-  // console.log(requestedBarcode);
+  console.log(requestedBarcode);
 
   // The book is searched in the data base.
   const bookExists = await BookModel.findOne({ barcode: requestedBarcode });
-  // console.log(bookExists);
+  console.log(bookExists);
   if (!bookExists) {
     res.send({
       status: 'Error',
@@ -448,7 +397,7 @@ books.post('/update', async (req, res) => {
     barcode: book.barcode.toUpperCase(),
   });
 
-  // console.log(bookExists);
+  console.log(bookExists);
 
   if (!bookExists) {
     res.send({
@@ -456,7 +405,7 @@ books.post('/update', async (req, res) => {
       msg: `The requested book does not appear in our database. If you believe this is a mistake, please contact ICT Support.`,
     });
   } else {
-    // console.log(book);
+    console.log(book);
     await BookModel.updateOne(
       { barcode: book.barcode.toUpperCase() },
       {
@@ -504,7 +453,7 @@ books.post('/delete', async (req, res) => {
     barcode: bookToDeleteBarcode.toUpperCase(),
   });
 
-  // console.log(bookExists);
+  console.log(bookExists);
 
   if (!bookExists) {
     res.send({
@@ -535,10 +484,10 @@ books.post('/notification', function (req, res) {
   // We extract the email from the object.
   const email = user.email;
 
-  // console.log(user.title);
+  console.log(user.books[0].title);
 
   // The text that is going to be sent, is written in prior hand.
-  const mailText = `Dear ${user.name},\nYou have the book ${user.title} from the library currently rented. Please return it to the Knowledge Centre by the end of day.\nThank you very much!`;
+  const mailText = `Dear ${user.firstName},\nYou have the book ${user.books[0].title} from the library currently rented. Please return it to the Knowledge Centre by the end of day.\nThank you very much!`;
 
   // We use the sendEmail function adding the email as first param and the text as the second param. A message indicating that everything worked is sent to Frontend.
   sendEmail(email, mailText);

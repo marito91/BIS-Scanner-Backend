@@ -13,15 +13,12 @@ const adminSchema = new Schema(
     },
     firstName: {
       type: 'string',
-      required: true,
     },
     lastName: {
       type: 'string',
-      required: true,
     },
     code: {
       type: 'number',
-      required: true,
     },
   },
   {

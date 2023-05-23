@@ -1,40 +1,59 @@
 const { model, Schema } = require('mongoose');
 
-const deviceSchema = new Schema(
-  {
-    device: {
-      type: 'string',
-      required: true,
-    },
-    number: {
-      type: 'number',
-      required: true,
-    },
-    available: {
-      type: 'boolean',
-      required: true,
-    },
-    date: {
-      type: 'string',
-      required: true,
-    },
-    time: {
-      type: 'string',
-      required: true,
-    },
-    comments: {
-      type: 'string',
-      required: true,
-    },
-    user: {
-      type: 'number',
-      required: true,
-    },
+const deviceSchema = new Schema({
+  userDocument: {
+    type: 'number',
+    ref: 'User',
+    required: true,
   },
-  {
-    versionKey: false,
-  }
-);
+  available: {
+    type: Boolean,
+    default: true,
+    required: true,
+  },
+  conditions: {
+    type: String,
+    required: true,
+  },
+  dateRented: {
+    type: String,
+    required: true,
+  },
+  dateReturned: {
+    type: String,
+    required: true,
+  },
+  deviceId: {
+    type: String,
+    required: true,
+  },
+  deviceType: {
+    type: String,
+    required: true,
+  },
+  deviceNumber: {
+    type: Number,
+    required: true,
+  },
+  rentalHistory: [
+    {
+      userDocument: {
+        type: 'number',
+        ref: 'User',
+        required: true,
+      },
+      dateRented: {
+        type: String,
+      },
+      dateReturned: {
+        type: String,
+      },
+      conditions: {
+        type: String,
+      },
+    },
+  ],
+});
 
 const DeviceModel = model('device', deviceSchema);
 
