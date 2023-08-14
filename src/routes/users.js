@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const users = Router();
 const { AdminModel } = require('../models/adminModel');
+const { UserModel } = require('../models/userModel');
 const { compare } = require('bcryptjs');
 const { sign } = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -78,6 +79,7 @@ users.post('/login', async function (req, res) {
         first: exists.firstName,
         last: exists.lastName,
         document: exists.code,
+        userType: 'admin',
       },
       process.env.JWT_SECRET_KEY
     );
@@ -102,9 +104,9 @@ users.post('/login', async function (req, res) {
 // Route currently under construction.
 users.post('/request_password', async function (req, res) {
   // Captures email
-  const { email } = req.body;
+  const { localUser } = req.body;
 
-  const requestedEmail = email;
+  const requestedEmail = localUser.username;
 
   // Checks if the user exists in DB
   const exists = await AdminModel.findOne({ email: requestedEmail });
@@ -113,7 +115,7 @@ users.post('/request_password', async function (req, res) {
   if (!exists) {
     return res.status(401).json({
       status: 'Error',
-      msg: `The email ${requestedEmail} does not appear in our database. Please contact support.`,
+      msg: `The email ${requestedEmail} does not support password recovery. Please contact support.`,
     });
     // If the user is part of the list then the password will be sent to the user's email.
   } else {
@@ -192,6 +194,37 @@ users.post('/signup', function (req, res) {
       msg: `The email ${localUser.username} does not have admin permissions.`,
     });
   }
+});
+
+/**
+ * 4)
+ * Name : Blocked
+ * Method : get
+ * Route : /blocked_users
+ * Description : This route will extract the list of users who are currently blocked from renting devices from the libray. Even if when renting, there is a validation first, with this route, the user will be able to fin easily the list of users or students who are blocked from renting devices.
+ */
+users.get('/blocked_users', async function (req, res) {
+  // This is the list of available admins.
+  const admins = [
+    'mariogomez@britishschool.edu.co',
+    'kruiz@britishschool.edu.co',
+    'biblioteca@britishschool.edu.co',
+    'jpmercado@britishschool.edu.co',
+    'ictdirector@britishschool.edu.co',
+  ];
+
+  let listOfBlockedUsers = [];
+
+  const blockedUsers = await UserModel.find({ blocked: true });
+
+  blockedUsers
+    ? (listOfBlockedUsers = blockedUsers)
+    : (listOfBlockedUsers = []);
+  res.send({
+    status: 'Admins',
+    msg: `This is the list of admins: ${admins}`,
+    listOfBlockedUsers,
+  });
 });
 
 exports.users = users;

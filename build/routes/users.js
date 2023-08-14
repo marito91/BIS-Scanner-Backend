@@ -5,336 +5,224 @@ const {
 } = require('express');
 const users = Router();
 const {
-  entryModel
-} = require('../models/entryModel');
+  AdminModel
+} = require('../models/adminModel');
 const {
-  communityModel
-} = require('../models/communityModel');
+  UserModel
+} = require('../models/userModel');
+const {
+  compare
+} = require('bcryptjs');
+const {
+  sign
+} = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 /**
- * X) Function date
- * Name : Get current date and time
- * METHOD : Local
+ * This file contains all the routes related to user management in the application.
+ * Previous to this documentation are the models and packages installed to be able to use several of the tools offered by the application.
+ * It imports users using router express, bcryptjs compare for encrypted keys, and jsonwebtoken to send information to front via tokens.
+ * Nodemailer is used as a mail manager to send notifications to users.
  */
-
-function getDateTime() {
-  let today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
-  const yyyy = today.getFullYear();
-  const h = String(today.getHours());
-  const m = String(today.getMinutes()).padStart(2, '0');
-  today = mm + '/' + dd + '/' + yyyy;
-  // Saca hora actual
-  const time = h + ':' + m;
-  return [today, time];
-}
-/**
- * X) Function Overwrite
- * Name : Overwrite rented device
- * METHOD : Database connected
- * Params: Receives student document, device type, device number and current date
- * Purpose: Update a user by assigning the device brought from Front end and changing the active state to true.
- */
-
-function overwrite(stu, dev, num, dat, tim) {
-  // Busca al estudiante que se va a actualizar por su documento (code : student)
-  communityModel.updateOne({
-    code: stu
-  },
-  // Hace los respectivos cambios en el registro encontrado
-  {
-    $set: {
-      device: dev,
-      number: num,
-      date: dat,
-      time: tim,
-      active: true
-    }
-  }, function (error) {
-    // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
-    if (error) {
-      res.send({
-        estado: 'error',
-        msg: 'No se pudo registrar el aquiler por problemas en la actualización del usuario.'
-      });
-    }
-  });
-}
-
-/**
- * X) Function returnDevice
- * Name : Return rented device
- * METHOD : Database connected
- * Params: Receives device type, device number and current date
- * Purpose: Update a user by assigning the device brought from Front end and changing the active state to true.
- */
-
-function returnDevice(dev, num, dat, tim) {
-  // Busca al usuario que se va a actualizar según el dispositivo y número (device: dev, number: num)
-  communityModel.updateOne({
-    device: dev,
-    number: num
-  },
-  // Hace los respectivos cambios en el registro encontrado
-  {
-    $set: {
-      device: 'none',
-      number: 0,
-      date: dat,
-      time: tim,
-      active: false
-    }
-  }, function (error) {
-    // Si hay un error envía mensaje que indica que no se pudo registrar el cambio.
-    if (error) {
-      res.send({
-        estado: 'error',
-        msg: 'No se pudo registrar la devolución del equipo por problemas en la actualización del usuario.'
-      });
-    }
-  });
-}
-
-/**
- * X) Function registerEntry
- * Name : Register entry
- * METHOD : Database connected
- * Params: Receives all info for later checking
- * Purpose: Registers a new entry everytime something is done in the application. Creates a history of processes.
- */
-
-function registerEntry(stu, name, last, secondLast, sec, mail, dev, num, dat, tim, typ) {
-  const newEntry = new entryModel({
-    code: stu,
-    firstName: name,
-    lastName: last,
-    secondLastName: secondLast,
-    grade: sec,
-    email: mail,
-    device: dev,
-    number: num,
-    date: dat,
-    time: tim,
-    type: typ
-  });
-  newEntry.save(function (error) {
-    if (error) {
-      console.log(error);
-      console.log('No se pudo crear un nuevo registro de movimiento.');
-    }
-    console.log('Registro exitoso.');
-  });
-}
 
 /**
  * X)
- * Name : Probar conexión
- * Method : POST
- * Route : /prueba
+ * Name : Send Email
+ * Description : The purpose of this function is to be in charge of sending emails/notifications to users. It receives an array with an email list along with the message that will be sent to that list.
  */
-users.post('/prueba', async function (req, res) {
-  // Se recibe la información del frontend
-  const {
-    mensaje
-  } = req.body;
-  mensaje.txt === 'Mensaje de prueba' ? res.send({
-    status: 'ok',
-    msg: 'La aplicación se encuentra conectada al servidor.'
-  }) : res.send({
-    status: 'Error',
-    msg: 'La aplicación no pudo establecer una conexión estable al servidor. Por favor contacte a soporte.'
+function sendEmail(emailList, msg) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'kc@britishschool.edu.co',
+      pass: `${process.env.password}`
+    }
   });
-});
+  const mailOptions = {
+    from: 'kc@britishschool.edu.co',
+    to: emailList,
+    subject: 'Knowledge Centre Notification',
+    text: msg + '\n\nKC Services\nKnowledge Centre\nBritish International School'
+  };
+  transporter.sendMail(mailOptions, function (error, info) {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
+}
 
 /**
  * 1)
- * Name : Subscribe new users
+ * Name : Login users
  * Method : POST
- * Route : /rent
+ * Route : /login
+ * Description : The purpose of this route is to log in users who try to enter the application in the front end. This route receives an object that includes email and password, checks that it is in the database and determines if the user can access or not by sending the token with the required information to the front end.
  */
-users.post('/rent', async function (req, res) {
-  // Se recibe la información del frontend
+
+users.post('/login', async function (req, res) {
+  // Captures email / password
   const {
-    userInfo
+    localUser
   } = req.body;
+  const username = localUser.username;
+  const password = localUser.password;
 
-  // El objeto se desestructura en diferentes variables
-  const [student, device, number, entryDate, entryTime] = [userInfo.code, userInfo.device, userInfo.number, getDateTime()[0], getDateTime()[1]];
-  // Se hace validación en consola para revisar si los datos llegaron correctamente.
-  console.log('Member code: ' + student);
-  console.log('Device: ' + device);
-  console.log('Number: ' + number);
-  console.log('Entry Date: ' + entryDate);
-  console.log('Entry Time: ' + entryTime);
-
-  // Se busca primero si el usuario existe en base de datos por medio del número de documento.
-  const exists = await communityModel.findOne({
-    code: parseInt(student)
+  // Checks if the user exists in DB
+  const exists = await AdminModel.findOne({
+    email: username
   });
-  // Si el estudiante no existe, envía un mensaje indicando que el usuario no se encuentra registrado en la base de datos.
+
+  // If the user does not exist, it sends a message indicating that the user does not exist in the database. (Since it is a reduced and controlled list then few users will have access.)
   if (!exists) {
-    res.send({
-      status: 'error',
-      msg: `El usuario ${userInfo.code} no se encuentra registrado en nuestra base de datos.`
+    return res.status(401).json({
+      status: 'Error',
+      msg: `The email ${username} does not appear in our database. Please contact support.`
     });
-    // Si por lo contrario, el usuario sí existe, se revisa que no tenga un dispositivo alquilado ya.
-  } else {
-    // Si tiene un dispositivo alquilado, se envía el mensaje respectivo al frontend indicando cuál es el dispositivo que debe entregar.
-    if (exists.active) {
-      res.send({
-        status: 'Error',
-        msg: `El estudiante ${exists.firstName} ${exists.lastName} con documento ${exists.code} tiene actualmente el dispositivo ${exists.device} #${exists.number} alquilado. Fue alquilado el ${exists.date} a las ${exists.time} y no ha sido devuelto.`
-      });
-    } else {
-      // De lo contrario ya pasó todas las validaciones y se procede a editar el registro y asignarle el dispositivo al estudiante por medio de la función de overwrite.
-      overwrite(parseInt(student), device, parseInt(number), entryDate, entryTime);
-      // Se realiza movimiento por ende se registra en base de datos.
-      registerEntry(exists.code, exists.firstName, exists.lastName, exists.secondLastName, exists.grade, exists.email, device, parseInt(number), entryDate, entryTime, 'ALQUILER');
-      res.send({
-        estado: 'ok',
-        msg: 'Alquiler registrado con éxito.'
-      });
-    }
   }
+
+  // Compares password
+  const passOK = await compare(password, exists.password);
+  if (passOK === true) {
+    const token = sign({
+      email: exists.email,
+      first: exists.firstName,
+      last: exists.lastName,
+      document: exists.code,
+      userType: 'admin'
+    }, process.env.JWT_SECRET_KEY);
+    return res.status(200).json({
+      status: 'ok',
+      msg: 'You have signed in successfully.',
+      token
+    });
+  }
+  return res.status(401).json({
+    status: 'Error',
+    msg: 'The email and password do not match. Please contact support.'
+  });
 });
 
 /**
  * 2)
- * Name : Return devices
+ * Name : Request Password
  * Method : POST
- * Route : /return
+ * Route : /request_password
+ * Description : In this route, admins can request their passwords if the forgot them. The password will be sent to their emails as long as they are part of the list.
  */
-users.post('/return', async function (req, res) {
-  // Se recibe la información del frontend
-  const {
-    userInfo
-  } = req.body;
-  // El objeto se desestructura en diferentes variables
-  const [type, num, entryDate, entryTime] = [userInfo.device, userInfo.number, getDateTime()[0], getDateTime()[1]];
-  // Se hace validación en consola para revisar si los datos llegaron correctamente.
-  console.log('Device: ' + type);
-  console.log('Number: ' + num);
-  console.log('Entry Date: ' + entryDate);
-  console.log('Entry Time: ' + entryTime);
 
-  // Se busca primero el registro que corresponda al tipo de dispositivo y número que se solicita desde frontend.
-  const exists = await communityModel.findOne({
-    device: type,
-    number: parseInt(num)
+// Route currently under construction.
+users.post('/request_password', async function (req, res) {
+  // Captures email
+  const {
+    localUser
+  } = req.body;
+  const requestedEmail = localUser.username;
+
+  // Checks if the user exists in DB
+  const exists = await AdminModel.findOne({
+    email: requestedEmail
   });
-  // Si el registro no existe, envía un mensaje indicando que no se encontró un registro de ese dispositivo en base de datos.
+
+  // If the user is not part of the admins list, then an error message will be sent.
   if (!exists) {
-    res.send({
-      status: 'error',
-      msg: `No se encontró en base de datos un registro que corresponda al ${type} #${num}`
+    return res.status(401).json({
+      status: 'Error',
+      msg: `The email ${requestedEmail} does not support password recovery. Please contact support.`
     });
-    // Si por lo contrario, se encuentra un registro entonces se pasa a realizar el proceso de devolución.
+    // If the user is part of the list then the password will be sent to the user's email.
   } else {
-    returnDevice(type, parseInt(num), entryDate, entryTime);
-    //  Debido a que se realiza un movimiento, este se registra en base de datos.
-    registerEntry(exists.code, exists.firstName, exists.lastName, exists.secondLastName, exists.grade, exists.email, type, parseInt(num), entryDate, entryTime, 'DEVOLUCION');
-    res.send({
-      estado: 'ok',
-      msg: `El ${exists.device} #${exists.number} alquilado por ${exists.firstName} ${exists.lastName} fue devuelto exitosamente.`
-    });
+    const message = `Estimado usuario,\n su contraseña para ingresar al servicio del Knowledge Centre es: ${exists.password}. \nPor favor no comparta esta contraseña con absolutamente nadie.`;
+    sendEmail(requestedEmail, message);
+    return res.status(200).json({
+      status: 'ok',
+      msg: `The password was sent to ${requestedEmail}.`
+    }); // url: '/account' });
   }
 });
 
 /**
  * 3)
- * Name : Search devices
+ * Name : Signup
  * Method : POST
- * Route : /search
+ * Route : /signup
+ * Description : This route will let users signup to be able to use the application. In the list of users, only those who belong to the library are going to be able to sign up. Since this application has components which only certain people can manage, then it will not be available for everyone.
  */
-users.post('/search', async function (req, res) {
-  // Se recibe la información del frontend
+users.post('/signup', function (req, res) {
+  // The email comes from front
   const {
-    userInfo
+    localUser
   } = req.body;
-  // El objeto se desestructura en diferentes variables
-  const [type, num] = [userInfo.device, userInfo.number];
-  // Se hace validación en consola para revisar si los datos llegaron correctamente.
-  console.log('Device: ' + type);
-  console.log('Number: ' + num);
+  // This is the list of available admins.
+  const admins = ['mariogomez@britishschool.edu.co', 'kruiz@britishschool.edu.co', 'biblioteca@britishschool.edu.co', 'jpmercado@britishschool.edu.co', 'ictdirector@britishschool.edu.co'];
 
-  // Se busca primero el registro que corresponda al tipo de dispositivo y número que se solicita desde frontend.
-  const exists = await communityModel.findOne({
-    device: type,
-    number: parseInt(num)
-  });
-  // Si el registro no existe, envía un mensaje indicando que no se encontró un registro de ese dispositivo en base de datos.
-  if (!exists) {
-    res.send({
-      status: 'error',
-      msg: `El ${type} #${num} no se encuentra alquilado en este momento.`
+  // It the list includes the requested email then it will search for an entry inside the database to check if it already exists.
+  if (admins.includes(localUser.username)) {
+    AdminModel.findOne({
+      email: localUser.username
+    }, function (error, exists) {
+      if (error) {
+        return res.send({
+          status: 'error',
+          msg: "Couldn't connect to database"
+        });
+      } else {
+        // If the user already exists, then it will send a message saying that the user is already signed up.
+        if (exists !== null && exists !== undefined && exists.email === localUser.username) {
+          return res.send({
+            status: 'ok',
+            msg: `The email ${exists.email} is already registered in our database.`
+          });
+          // If the user is not part of the database list, then it will create a new entry with the necessary information.
+        } else {
+          const newAdmin = new AdminModel({
+            password: localUser.password,
+            email: localUser.username
+          });
+          newAdmin.save(function (error) {
+            if (error) {
+              console.log(error);
+              return res.send({
+                status: 'error',
+                msg: "Couldn't register new user to database"
+              });
+            }
+            res.send({
+              status: 'ok',
+              msg: 'Thank you for subscribing! Welcome to the admins club!'
+            });
+          });
+        }
+      }
     });
-    // Si por lo contrario, se encuentra un registro entonces se indica quién lo tiene y desde cuándo.
   } else {
     res.send({
-      estado: 'ok',
-      msg: `El ${exists.device} #${exists.number} se encuentra alquilado por ${exists.firstName} ${exists.lastName} ${exists.secondLastName} de ${exists.grade} desde el ${exists.date} a las ${exists.time}.`
+      status: 'Error',
+      msg: `The email ${localUser.username} does not have admin permissions.`
     });
   }
 });
 
 /**
  * 4)
- * Name : Get User Entries
- * Method : POST
- * Route : /entries
+ * Name : Blocked
+ * Method : get
+ * Route : /blocked_users
+ * Description : This route will extract the list of users who are currently blocked from renting devices from the libray. Even if when renting, there is a validation first, with this route, the user will be able to fin easily the list of users or students who are blocked from renting devices.
  */
-users.post('/entries', async function (req, res) {
-  // Se recibe la información del frontend
-  const {
-    searchInfo
-  } = req.body;
-  const [doc, dat, filt] = [parseInt(searchInfo.document), searchInfo.date, searchInfo.filter];
-  console.log(dat);
-  const dateArr = dat.split('-');
-  console.log(dateArr);
-  const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
-  console.log(fixedDate);
-  let data = {};
-  filt === 'Documento' ? data = await entryModel.find({
-    code: doc
-  }) : data = await entryModel.find({
-    date: fixedDate
+users.get('/blocked_users', async function (req, res) {
+  // This is the list of available admins.
+  const admins = ['mariogomez@britishschool.edu.co', 'kruiz@britishschool.edu.co', 'biblioteca@britishschool.edu.co', 'jpmercado@britishschool.edu.co', 'ictdirector@britishschool.edu.co'];
+  let listOfBlockedUsers = [];
+  const blockedUsers = await UserModel.find({
+    blocked: true
   });
+  blockedUsers ? listOfBlockedUsers = blockedUsers : listOfBlockedUsers = [];
   res.send({
-    status: 'ok',
-    msg: 'Info found',
-    data
-  });
-});
-
-/**
- * 5)
- * Name : Get Device Entries
- * Method : GET
- * Route : /devices
- */
-users.get('/devices', function (req, res) {
-  // Se inicializa el objeto que se va a enviar
-  let data = {};
-
-  // Se buscan todos los registros que tengan un dispositivo rentado.
-  communityModel.find({
-    active: true
-  }, function (error, activeOnes) {
-    if (error) {
-      res.send({
-        status: 'Error',
-        msg: 'No se pudo establecer uan conexión a base de datos.'
-      });
-    } else {
-      data = activeOnes;
-      res.send({
-        status: 'ok',
-        msg: 'Info found',
-        data
-      });
-    }
+    status: 'Admins',
+    msg: `This is the list of admins: ${admins}`,
+    listOfBlockedUsers
   });
 });
 exports.users = users;

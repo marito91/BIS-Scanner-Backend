@@ -6,8 +6,17 @@ const mongoose = require('mongoose');
 
 // Main routes for APIs
 const {
+  devices
+} = require('./routes/devices');
+// const { newDevices } = require('./routes/newDevices');
+const {
+  books
+} = require('./routes/books');
+const {
   users
 } = require('./routes/users');
+
+// npm install --save express-validator
 const app = express();
 app.use(cors()); // Middleware CORS
 app.use(express.json()); // Middleware json
@@ -20,6 +29,8 @@ require('dotenv').config();
 
 // APIs
 app.use('/users', users);
+app.use('/devices', devices);
+app.use('/books', books);
 
 // Database connection
 mongoose.connect(process.env.MONGODB_SERVER_URL).then(res => console.log('Connected to database')).catch(error => console.log(error));
