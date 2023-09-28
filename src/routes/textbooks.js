@@ -12,98 +12,98 @@ const nodemailer = require('nodemailer');
  * Params:
  */
 
-const testData = [
-  {
-    document: 123,
-    section: 'PRIMARIA',
-    grade: '3A',
-    name: 'Fulanito',
-    lastName: 'Perez',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: false,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-  {
-    document: 456,
-    section: 'PRIMARIA',
-    grade: '5B',
-    name: 'Pedrito',
-    lastName: 'Coral',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: false,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-  {
-    document: 789,
-    section: 'SECUNDARIA',
-    grade: '7A',
-    name: 'Mayerli',
-    lastName: 'Pacheco',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: true,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-  {
-    document: 987,
-    section: 'SECUNDARIA',
-    grade: '9C',
-    name: 'Enrique',
-    lastName: 'Bueno Lindo',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: false,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-  {
-    document: 654,
-    section: 'SECUNDARIA',
-    grade: '13B',
-    name: 'Delfina',
-    lastName: 'Pataquiva',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: false,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-  {
-    document: 321,
-    section: 'PRIMARIA',
-    grade: 'STAFF',
-    name: 'Yadira',
-    lastName: 'Pacheco',
-    email: 'mariogomez@britishschool.edu.co',
-    blocked: false,
-    hasDeviceRented: false,
-    hasBookRented: false,
-    hasTextBookRented: false,
-    devicehistory: [],
-    bookHistory: [],
-    textBookHistory: [],
-  },
-];
+// const testData = [
+//   {
+//     document: 123,
+//     section: 'PRIMARIA',
+//     grade: '3A',
+//     name: 'Fulanito',
+//     lastName: 'Perez',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: false,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+//   {
+//     document: 456,
+//     section: 'PRIMARIA',
+//     grade: '5B',
+//     name: 'Pedrito',
+//     lastName: 'Coral',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: false,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+//   {
+//     document: 789,
+//     section: 'SECUNDARIA',
+//     grade: '7A',
+//     name: 'Mayerli',
+//     lastName: 'Pacheco',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: true,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+//   {
+//     document: 987,
+//     section: 'SECUNDARIA',
+//     grade: '9C',
+//     name: 'Enrique',
+//     lastName: 'Bueno Lindo',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: false,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+//   {
+//     document: 654,
+//     section: 'SECUNDARIA',
+//     grade: '13B',
+//     name: 'Delfina',
+//     lastName: 'Pataquiva',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: false,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+//   {
+//     document: 321,
+//     section: 'PRIMARIA',
+//     grade: 'STAFF',
+//     name: 'Yadira',
+//     lastName: 'Pacheco',
+//     email: 'mariogomez@britishschool.edu.co',
+//     blocked: false,
+//     hasDeviceRented: false,
+//     hasBookRented: false,
+//     hasTextBookRented: false,
+//     devicehistory: [],
+//     bookHistory: [],
+//     textBookHistory: [],
+//   },
+// ];
 /**
  * X)
  * Name : Send Email
@@ -136,7 +136,7 @@ function sendEmail(emailList, msg) {
     if (error) {
       console.log(error);
     } else {
-      console.log('Email sent'); // + info.response);
+      console.log(`Email sent to ${emailList}`);
     }
   });
 }
@@ -173,7 +173,7 @@ function getDateAndTime() {
 
 textbooks.post('/loadStudent', async function (req, res) {
   // Document and barcode json come from frontend
-  const { document } = req.body;
+  const { document, admin } = req.body;
 
   if (!document) {
     res.send({
@@ -183,9 +183,19 @@ textbooks.post('/loadStudent', async function (req, res) {
     return;
   }
 
+  console.log(
+    `User textbook search was started by: ${admin} for the following document: ${document}`
+  );
+
   const student = await UserModel.findOne({
     document: Number(document),
   });
+
+  const rentedTextBooks = await TextBookModel.find({ userDocument: document });
+
+  rentedTextBooks.forEach((text) =>
+    console.log(text.title + ' # ' + text.number)
+  );
 
   let status = '';
   let msg = '';
@@ -193,12 +203,20 @@ textbooks.post('/loadStudent', async function (req, res) {
   if (!student) {
     status = 'Error';
     msg = 'Student was not found in our database.';
+    console.log('Student was not found in the database.');
   } else {
     status = 'ok';
     msg = 'Student found succesfully';
+    console.log('Student was found in the database.');
   }
+  rentedTextBooks.length > 0
+    ? console.log(
+        `A list of rented textbooks by the student will be sent to client.`
+      )
+    : console.log(`No rented textbooks were found. Array will be sent empty.`);
 
-  res.send({ status, msg, student });
+  console.log(`User textbook search finished by: ${admin}.`);
+  res.send({ status, msg, student, rentedTextBooks });
 });
 
 /**
@@ -206,143 +224,252 @@ textbooks.post('/loadStudent', async function (req, res) {
  * Name : Assign text books
  * Method : POST
  * Route : /assign
- * Description : This route will let the application receive the required information from frontend to be able to assign/rent a package of books to a certain user. The function receives a document number and an array of books to be assigned. With this information it assigns all of the textbooks inside the array to the user after checking all of the conditions required.
+ * Description : This route will let the application receive the required information from frontend to be able to assign/rent a package of textbooks to a certain user. The function receives a student object number, an array of books to be assigned and observations if there are any. With this information it assigns all of the textbooks inside the array to the user after checking all of the conditions required.
  */
-
-// const bookExists = TextBookModel.findOne({
-//   grades: 4,
-// });
-
-// console.log(bookExists);
-
 textbooks.post('/assign', async function (req, res) {
-  // Document and barcode json come from frontend
-  const { student, textbooksWithSamples, observations } = req.body;
+  const { student, textbooksWithSamples, observations, admin } = req.body;
 
   if (!student || !textbooksWithSamples) {
-    res.send({
+    return res.send({
       status: 'Error',
       msg: 'No information regarding textbooks was received. Please contact ICT Support.',
     });
-    return;
-  } else {
-    // const textBookExists = await TextBookModel.findOne({
-    //   title: text,
-    // });
-    await textbooksWithSamples.forEach((textbook) => {
-      console.log('Title: ' + textbook.title);
-      console.log('Number: ' + textbook.sample);
-      const textBookExists = TextBookModel.findOne({
+  }
+  console.log(`Textbook assignment was started by: ${admin}`);
+
+  const listOfTextbooks = [];
+  const errorMessages = [];
+
+  try {
+    for (const textbook of textbooksWithSamples) {
+      // Check if textbook.sample is a valid number
+      if (isNaN(textbook.sample)) {
+        console.log(`Invalid sample number: ${textbook.sample}. Skipping.`);
+        errorMessages.push(
+          `The following textbook was not assigned because of an invalid sample number:\n ${textbook.title}.\nSample number received: ${textbook.sample}`
+        );
+        continue; // Continue to the next iteration of the loop
+      }
+      // Textbook is searched in database.
+      const textBookExists = await TextBookModel.findOne({
         title: textbook.title,
         number: Number(textbook.sample),
       });
 
-      if (textBookExists) {
+      if (!textBookExists) {
         console.log(
-          `${textbook.title} number ${textbook.sample} is available in database.`
+          `${textbook.title} number ${textbook.sample} is NOT available in the database.`
         );
+        errorMessages.push(
+          `${textbook.title} number ${textbook.sample} is NOT available in the database.`
+        );
+        continue; // Continue to the next iteration of the loop
       } else {
         console.log(
-          `${textbook.title} number ${textbook.sample} is NOT available in database.`
+          `${textbook.title} number ${textbook.sample} is available in the database.`
         );
+        // Check if the textbook is available
+        if (!textBookExists.available) {
+          console.log(
+            `${textbook.title} number ${textbook.sample} is not available for update. Skipping update.`
+          );
+          // Send response to frontend indicating unavailability
+          errorMessages.push(
+            `${textbook.title} number ${textbook.sample} is not available for assignment so it was not assigned. If you believe this is a mistake, contact ICT Support.`
+          );
+          continue; // Continue to the next iteration of the loop
+        }
+
+        await TextBookModel.updateOne(
+          { title: textbook.title, number: Number(textbook.sample) },
+          {
+            $set: {
+              userDocument: Number(student.document),
+              available: false,
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+            },
+            $push: {
+              rentalHistory: {
+                userDocument: Number(student.document),
+                dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                dateReturned: null,
+                conditions: !observations ? 'none' : observations,
+              },
+            },
+          }
+        );
+
+        await UserModel.updateOne(
+          { document: Number(student.document) },
+          {
+            $push: {
+              textbookHistory: {
+                textbook: textbook.title,
+                number: Number(textbook.sample),
+                dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                dateReturned: null,
+                conditions: !observations ? 'none' : observations,
+              },
+            },
+          }
+        );
+
+        listOfTextbooks.push(textbook.title + ' #' + textbook.sample + '\n');
+        console.log('Update successful');
       }
+    }
+    // If there are error messages, send them to the frontend and return early
+    if (errorMessages.length > 0) {
+      console.log(
+        `Some errors were encountered during the assignment process.`
+      );
+      return res.send({
+        status: 'error',
+        msg: errorMessages.join('\n'),
+      });
+    }
+
+    const message = `Dear ${
+      student.name + ' ' + student.lastName
+    }, \nYou have been assigned the following textbooks for the current school year: \n\n${listOfTextbooks} \nPlease remember to take care of them and use them with responsibility.\nThanks for using our service.\nRegards,`;
+
+    sendEmail([student.email, 'kc@britishschool.edu.co'], message);
+    console.log(`Textbook assignment was completed successfully by: ${admin}`);
+
+    return res.send({
+      status: 'ok',
+      msg: `Textbooks assigned successfully.`,
     });
-
-    // console.log(student);
-    // console.log(textbooksWithSamples);
-    // console.log(observations);
+  } catch (error) {
+    console.error('Error:', error);
+    console.log(
+      `Some errors were encountered during the assignment process and it could not be completed.`
+    );
+    return res.send({
+      status: 'error',
+      msg: 'An error occurred while trying to assign textbooks. Please contact ICT Support.',
+    });
   }
+});
 
-  // Textbooks needs to be updated
+/**
+ * 3)
+ * Name : Get rented textbooks
+ * Method : GET
+ * Route : /rented
+ * Description : This route sends an array of rented textbooks and their active users.
+ */
+textbooks.get('/rented', async function (req, res) {
+  const userMap = new Map();
 
-  // Loop textbooksWithSamples to check each textbook and make the necesary updates.
+  const rentedTextBooks = await TextBookModel.find({ available: false });
+  console.log('Rented textbooks total: ' + rentedTextBooks.length);
+  const usersWithTextbooks = await UserModel.find({
+    'textbookHistory.0': { $exists: true, $ne: [] },
+  });
 
-  // Looks for textbook by title and number (student was already validated before assigning textbooks) and check if it exists
+  // const documents = [];
+  // rentedTextBooks.forEach((textbook) => documents.push(textbook.userDocument));
 
-  // Checks that it is available
+  // console.log('Documents length: ' + documents.length);
 
-  // If it is available:
-  // available: false
-  // userDocument: student.document
-  // dateRented: new date
-  // rentalHistory: userdocument, daterented, observations
+  // const documentsSet = new Set(documents);
 
-  // Send email with confirmation and all information to student and kc email.
+  // const finalDocuments = Array.from(documentsSet.values());
 
-  // // Se separan los datos según el formato que trae la fecha XX-XX-XXXX
-  // const dateArr = dueDate.split('-');
-  // // Se revisa que la separación se haya realizado correctamente
-  // console.log(dateArr);
-  // // Se crea una nueva string con el formato utilizado para las fechas.
-  // const fixedDate = dateArr[1] + '/' + dateArr[2] + '/' + dateArr[0];
-  // console.log(fixedDate);
-  // // Then the code checks if both the user and book exist.
-  // const userExists = await UserModel.findOne({ document: Number(document) });
-  // const textBookExists = await TextBookModel.findOne({
-  //   grades: 4,
+  // console.log('Final Documents length: ' + finalDocuments.length);
+
+  // // finalDocuments.forEach((document) => console.log(document));
+
+  // console.log('Users with textbooks total: ' + usersWithTextbooks.length);
+
+  // const pipeline = [
+  //   {
+  //     $match: {
+  //       available: false,
+  //     },
+  //   },
+  //   {
+  //     $group: {
+  //       _id: '$userDocument',
+  //     },
+  //   },
+  //   {
+  //     $group: {
+  //       _id: null,
+  //       count: { $sum: 1 },
+  //     },
+  //   },
+  // ];
+
+  // const aggregation = TextBookModel.aggregate(pipeline);
+
+  // aggregation.exec((err, result) => {
+  //   if (err) {
+  //     console.error(err);
+  //   } else {
+  //     console.log(result);
+  //   }
   // });
 
-  // let status = '';
-  // let msg = '';
+  // // const missingDocuments = [];
 
-  //   if (!userExists) {
-  //     status = 'Error';
-  //     msg = 'User does not exist.';
-  //   } else if (userExists.blocked) {
-  //     status = 'Error';
-  //     msg = 'User has a fine that needs to be paid.';
-  //   } else if (userExists.hasBookRented) {
-  //     status = 'Error';
-  //     msg = 'The user currently has a book rented.';
-  //   } else if (!bookExists) {
-  //     status = 'Error';
-  //     msg = 'Book is not registered in the database.';
-  //   } else if (!bookExists.available) {
-  //     status = 'Error';
-  //     msg = 'This book is currently rented.';
-  //   } else {
-  //     await BookModel.updateOne(
-  //       { barcode },
-  //       {
-  //         $set: {
-  //           userDocument: Number(userExists.document),
-  //           available: false,
-  //           dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-  //         },
-  //         $push: {
-  //           rentalHistory: {
-  //             userDocument: Number(userExists.document),
-  //             dueDate: fixedDate,
-  //             dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-  //             dateReturned: null,
-  //             conditions: null,
-  //           },
-  //         },
-  //       }
-  //     );
-  //     // Update user rental history
-  //     await UserModel.updateOne(
-  //       { document: Number(document) },
-  //       {
-  //         $set: { hasBookRented: true },
-  //         $push: {
-  //           bookHistory: {
-  //             barcode,
-  //             dueDate: fixedDate,
-  //             dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-  //             dateReturned: null,
-  //             conditions: null,
-  //           },
-  //         },
-  //       }
-  //     );
-  //     // A message is stated to be sent to the client
-  //     const message = `Dear user, \nYou have rented the book ${bookExists.title} today. Please remember to return it by ${dueDate}.\nThanks for using our service.\nRegards,`;
-  //     sendEmail(userExists.email, message);
-  //     status = 'OK';
-  //     msg = 'Book rented successfully.';
-  //   }
-  res.send({ status: 'ok', msg: 'Console logged succesfully.' });
+  // const userDocumentSet = new Set(
+  //   usersWithTextbooks.map((user) => user.document)
+  // );
+
+  // const missingDocuments = finalDocuments.filter(
+  //   (document) => !userDocumentSet.has(document)
+  // );
+
+  // console.log('Filtered documents length: ' + missingDocuments.length);
+
+  // missingDocuments.forEach((doc) => console.log(doc));
+
+  for (const user of usersWithTextbooks) {
+    // The textbooks rented by the student are filtered
+    const indexedTextbooks = rentedTextBooks.filter(
+      (textbook) => textbook.userDocument === user.document
+    );
+
+    if (userMap.has(user.document)) {
+      const existingUser = userMap.get(user.document);
+      indexedTextbooks.forEach((textbook) =>
+        existingUser.textbooks.push({
+          title: textbook.title,
+          sample: textbook.number,
+          dateRented: textbook.dateRented,
+        })
+      );
+    } else {
+      const textbooksToAdd = indexedTextbooks.map((textbook) => ({
+        title: textbook.title,
+        sample: textbook.number,
+        dateRented: textbook.dateRented,
+      }));
+
+      // If not, add the user to the map
+      userMap.set(user.document, {
+        document: user.document,
+        name: user.name,
+        lastName: user.lastName,
+        section: user.section,
+        grade: user.grade,
+        email: user.email,
+        textbooks: textbooksToAdd,
+      });
+    }
+  }
+
+  // Convert the map values (unique users) to an array
+  const users = Array.from(userMap.values());
+  // console.log(users.length);
+  // console.log(data.length);
+  res.send({
+    status: 'OK',
+    msg: 'Rented textbooks fetched succesfully',
+    data: users,
+  });
 });
 
 exports.textbooks = textbooks;

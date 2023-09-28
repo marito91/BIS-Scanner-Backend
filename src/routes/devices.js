@@ -112,6 +112,7 @@ devices.post('/rent', async function (req, res) {
     });
     // If the device is not available, then the client is notified in its side.
     if (
+      !requestedDevice ||
       requestedDevice.available === null ||
       requestedDevice.available === undefined ||
       !requestedDevice.available

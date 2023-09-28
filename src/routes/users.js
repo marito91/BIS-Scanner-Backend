@@ -141,7 +141,7 @@ users.post('/signup', function (req, res) {
   // This is the list of available admins.
   const admins = [
     'mariogomez@britishschool.edu.co',
-    'kruiz@britishschool.edu.co',
+    'kcpromoter@britishschool.edu.co',
     'biblioteca@britishschool.edu.co',
     'jpmercado@britishschool.edu.co',
     'ictdirector@britishschool.edu.co',
@@ -207,7 +207,7 @@ users.get('/blocked_users', async function (req, res) {
   // This is the list of available admins.
   const admins = [
     'mariogomez@britishschool.edu.co',
-    'kruiz@britishschool.edu.co',
+    'kcpromoter@britishschool.edu.co',
     'biblioteca@britishschool.edu.co',
     'jpmercado@britishschool.edu.co',
     'ictdirector@britishschool.edu.co',

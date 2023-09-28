@@ -80,6 +80,28 @@ const userSchema = new Schema(
         },
       ],
     },
+    textbookHistory: {
+      type: 'array',
+      default: [
+        {
+          textbook: {
+            type: 'string',
+          },
+          number: {
+            type: 'number',
+          },
+          dateRented: {
+            type: Date,
+          },
+          dateReturned: {
+            type: Date,
+          },
+          conditions: {
+            type: String,
+          },
+        },
+      ],
+    },
   },
   {
     versionKey: false,
