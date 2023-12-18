@@ -3,6 +3,7 @@ const devices = Router();
 const { DeviceModel } = require('../models/deviceModel');
 const { UserModel } = require('../models/userModel');
 const nodemailer = require('nodemailer');
+const { getIo } = require('../socket');
 
 /**
  * This file contains all the routes related to device management in the application.
@@ -20,31 +21,35 @@ const nodemailer = require('nodemailer');
  * Description : This function is meant to be used each time a notification via email needs to be sent to any user. The function receives a list of emails and a message.
  */
 function sendEmail(emailList, msg) {
-  // Via the nodemailer package, a transporter is created.
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'kc@britishschool.edu.co',
-      pass: `${process.env.password}`,
-    },
-  });
+  return new Promise((resolve, reject) => {
+    // Via the nodemailer package, a transporter is created.
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'kc@britishschool.edu.co',
+        pass: `${process.env.password}`,
+      },
+    });
 
-  // All the information that goes in the email is written here.
-  const mailOptions = {
-    from: 'kc@britishschool.edu.co',
-    to: emailList,
-    subject: 'Knowledge Centre Notification',
-    text:
-      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-  };
+    // All the information that goes in the email is written here.
+    const mailOptions = {
+      from: 'kc@britishschool.edu.co',
+      to: emailList,
+      subject: 'Knowledge Centre Notification',
+      text:
+        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
+    };
 
-  // The email is sent
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-    } else {
-      console.log('Email sent'); // + info.response);
-    }
+    // The email is sent
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.error(error);
+        reject(error);
+      } else {
+        console.log('Email sent:', info.response);
+        resolve(info);
+      }
+    });
   });
 }
 
@@ -70,7 +75,7 @@ function getDateAndTime() {
 
   return [today, time];
 }
-
+// module.exports = (io) => {
 /**
  * 1)
  * Name : Rent devices
@@ -79,7 +84,7 @@ function getDateAndTime() {
  * Description : This route is going to manage the rent of devices. Information from the user is going to come from frontend and the device will be registered as rented with all of its implications in the corresponding collections.
  */
 devices.post('/rent', async function (req, res) {
-  const { user } = req.body;
+  const { user, admin } = req.body;
 
   // First the user input needs to be validated to check that the object contains all necessary info.
   if (!user || !user.document || !user.device || !user.number) {
@@ -88,18 +93,31 @@ devices.post('/rent', async function (req, res) {
       msg: 'Invalid user input. Please check all the fields and try again.',
     });
   }
+
+  console.log(
+    `${getDateAndTime()}: Device renting process started by ${admin}. The ${
+      user.device + ' #' + user.number
+    } is expected to be assigned to the user ${user.document}.`
+  );
+
   // Then it checks if the user exists
   const userExists = await UserModel.findOne({
     document: Number(user.document),
   });
   // If the user doesn't exist, then the client is notified on its side.
   if (!userExists) {
+    console.log(
+      `${getDateAndTime()}: Process finished unsuccesfully as user does not exist.`
+    );
     res.send({
       status: 'Error',
       msg: `The ${user.document} doesn't seem to appear in our database.`,
     });
     // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
   } else if (userExists.hasDeviceRented) {
+    console.log(
+      `${getDateAndTime()}: Process finished unsuccesfully as user currently has a device rented.`
+    );
     res.send({
       status: 'Error',
       msg: `The user ${userExists.name} ${userExists.lastName} with document ${userExists.document} currently has a device rented.`,
@@ -117,6 +135,9 @@ devices.post('/rent', async function (req, res) {
       requestedDevice.available === undefined ||
       !requestedDevice.available
     ) {
+      console.log(
+        `${getDateAndTime()}: Process finished unsuccesfully since device is not available for rent.`
+      );
       res.send({
         status: 'Error',
         msg: `The ${user.device} ${user.number} doesn't seem to be available for rent in this moment.`,
@@ -164,8 +185,29 @@ devices.post('/rent', async function (req, res) {
       );
       // A confirmation message is declarated which will be then sent to the user who rents the device. Also a confirmation message is sent to client side.
       const message = `Dear ${userExists.name} ${userExists.lastName},\nYou have rented the ${user.device} #${user.number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
-      sendEmail(userExists.email, message);
-      res.send({ status: 'OK', msg: 'Device rented successfully.' });
+      // sendEmail(userExists.email, message);
+      // console.log(
+      //   `${getDateAndTime()}: Renting process finished succesfully by ${admin}`
+      // );
+
+      // res.send({ status: 'OK', msg: 'Device rented successfully.' });
+      sendEmail(userExists.email, message)
+        .then(() => {
+          console.log(
+            `${getDateAndTime()}: Renting process finished successfully by ${admin}`
+          );
+
+          res.send({ status: 'OK', msg: 'Device rented successfully.' });
+        })
+        .catch((error) => {
+          console.error('Error sending email:', error);
+
+          // If there's an error sending the email, you can still consider the renting process finished, but with a notification about the email issue
+          res.send({
+            status: 'OK',
+            msg: 'Device rented, but there was an issue sending the confirmation email.',
+          });
+        });
     }
   }
 });
@@ -179,7 +221,7 @@ devices.post('/rent', async function (req, res) {
  */
 devices.post('/return', async function (req, res) {
   // The type of device and number are received from frontend.
-  const { device, number } = req.body;
+  const { device, number, admin } = req.body;
 
   // First the user input needs to be validated to check that the necessary info is received.
   if (!device || !number) {
@@ -188,6 +230,11 @@ devices.post('/return', async function (req, res) {
       msg: 'Invalid user input. Please check that device type and number are entered correctly and try again.',
     });
   } else {
+    console.log(
+      `${getDateAndTime()}: Device return process started by ${admin}. The ${
+        device + ' #' + number
+      } is expected to be returned.`
+    );
     // If inputs are ok, then the device is searched in its respective collection.
     const rentedDevice = await DeviceModel.findOne({
       deviceType: device,
@@ -195,11 +242,15 @@ devices.post('/return', async function (req, res) {
     });
     // If the device is not found in the collection, then a message is sent explaining that there are no active records with the requested data.
     if (!rentedDevice) {
+      console.log(`${getDateAndTime()}: Device was not found in the database.`);
       res.send({
         status: 'Error',
         msg: `The ${device} #${number} was not found in our database.`,
       });
     } else if (rentedDevice.available) {
+      console.log(
+        `${getDateAndTime()}: Device is not registered as rented in the database.`
+      );
       // If the device is available, then it means that it was not registered as rented in first place so a message is sent to client.
       res.send({
         status: 'Error',
@@ -255,15 +306,46 @@ devices.post('/return', async function (req, res) {
         );
 
         // Conditions of how the device rented was given in are stated.
-        const conditions = rentedDevice.conditions;
+        // const conditions = rentedDevice.conditions;
         // The message to be sent to the user by email is stated.
         const message = `Dear user,\nYou returned the ${device} #${number} to the Knowledge Centre successfully. Thank you for using our service.`;
         // The email is sent the person who returned the device followed by the message written above. That's why the userThatRented object is taken from the collection.
-        sendEmail(userThatRented.email, message);
-        res.send({
-          status: 'OK',
-          msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully. If the device was not returned with the following conditions: ${conditions}, please follow the due process.`,
-        });
+        // sendEmail(userThatRented.email, message);
+        // console.log(
+        //   `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
+        //     rentedDevice.deviceNumber
+        //   } rented by ${userThatRented.name} ${
+        //     userThatRented.lastName
+        //   } was returned successfully. Process finished succesfully by ${admin}.`
+        // );
+        // res.send({
+        //   status: 'OK',
+        //   msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully.`,
+        // });
+        sendEmail(userThatRented.email, message)
+          .then(() => {
+            console.log(
+              `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
+                rentedDevice.deviceNumber
+              } rented by ${userThatRented.name} ${
+                userThatRented.lastName
+              } was returned successfully. Process finished successfully by ${admin}.`
+            );
+
+            res.send({
+              status: 'OK',
+              msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully.`,
+            });
+          })
+          .catch((error) => {
+            console.error('Error sending email:', error);
+
+            // If there's an error sending the email, you can still consider the return process finished, but with a notification about the email issue
+            res.send({
+              status: 'OK',
+              msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully, but there was an issue sending the confirmation email.`,
+            });
+          });
       }
     }
   }
@@ -379,29 +461,7 @@ devices.post('/entries', async function (req, res) {
           data,
         });
         return;
-      // deviceDates = await DeviceModel.find({
-      //   rentalHistory: {
-      //     $elemMatch: {
-      //       $or: [
-      //         { dateRented: searchInfo.date },
-      //         { dateReturned: searchInfo.date },
-      //       ],
-      //     },
-      //   },
-      // });
-      // userDates = await UserModel.find({
-      //   deviceHistory: {
-      //     $elemMatch: {
-      //       $or: [
-      //         { dateRented: searchInfo.date },
-      //         { dateReturned: searchInfo.date },
-      //       ],
-      //     },
-      //   },
-      // });
-      // console.log(deviceDates);
-      // console.log(userDates);
-      // break;
+
       // If the desired information is for a certain device, then we search for it in the devices collection.
       case searchInfo.device !== null || searchInfo.number !== 0:
         deviceHistory = await DeviceModel.findOne({
@@ -430,6 +490,7 @@ devices.post('/entries', async function (req, res) {
  * Description : This route is going to send the list of rented devices so that they are being able to be displayed on frontend and are easily accesible to the users.
  */
 devices.get('/rented', async function (req, res) {
+  const io = getIo(); // Access 'io' from the Express app
   // The list of rented devices and of actives users are assigned from their respectiv collections.
   const rentedDevices = await DeviceModel.find({ available: false });
   const activeOnes = await UserModel.find({ hasDeviceRented: true });
@@ -456,19 +517,14 @@ devices.get('/rented', async function (req, res) {
           conditions: deviceExists.conditions,
           // We take the last element of the rentalhistory array and grab the dateRented by converting it to isoString and taking only the date.
           date: deviceExists.dateRented,
-          // .toISOString()
-          // .substring(0, 10)
-          // .split('-')
-          // .reverse()
-          // .join('/'),
-          // time: deviceExists.dateRented.toISOString().substring(11, 19),
-          // time: deviceExists.dateRented,
         };
         return activeUser;
       }
       return user;
     });
     // console.log(listOfRentedDevices);
+    // Emit a Socket.io event to notify clients of the updated list of rented devices
+    io.sockets.emit('deviceRented', listOfRentedDevices);
     res.send({ status: 'ok', msg: 'Info found', listOfRentedDevices });
   }
 });
@@ -496,12 +552,20 @@ devices.post('/notification', function (req, res) {
   // The text that is going to be sent, is written in prior hand.
   const mailText = `Dear ${user.name},\nYou have a device from the library currently rented. Please return it to the Knowledge Centre by the end of day.\nThank you very much!`;
 
-  // We use the sendEmail function adding the email as first param and the text as the second param. A message indicating that everything worked is sent to Frontend.
-  sendEmail(email, mailText);
-  res.send({
-    status: 'OK',
-    msg: 'The user was notified by email.',
-  });
+  sendEmail(email, mailText)
+    .then(() => {
+      res.send({
+        status: 'OK',
+        msg: 'The user was notified by email.',
+      });
+    })
+    .catch((error) => {
+      console.error('Error sending email:', error);
+      res.status(500).send({
+        status: 'Error',
+        msg: 'An error occurred while sending the email.',
+      });
+    });
 });
 
 /**
@@ -523,11 +587,29 @@ devices.post('/notification_all', function (req, res) {
     'Dear user,\nYou have a device from the library currently rented. Please return it to the Knowledge Centre by the end of day.\nThank you very much!';
 
   // The function sendEmail is used with the email list as first param and the text as second param. A message is sent to frontend notifying that everything worked.
-  sendEmail(emails, mailText);
-  res.send({
-    status: 'OK',
-    msg: 'Notifications were sent to every user.',
-  });
+  // sendEmail(emails, mailText);
+  // res.send({
+  //   status: 'OK',
+  //   msg: 'Notifications were sent to every user.',
+  // });
+  sendEmail(emails, mailText)
+    .then(() => {
+      console.log('Notifications were sent to every user.');
+
+      res.send({
+        status: 'OK',
+        msg: 'Notifications were sent to every user.',
+      });
+    })
+    .catch((error) => {
+      console.error('Error sending email notifications:', error);
+
+      // If there's an error sending the email notifications, you can handle it accordingly
+      res.status(500).send({
+        status: 'Error',
+        msg: 'An error occurred while sending email notifications.',
+      });
+    });
 });
 
 /**
@@ -538,26 +620,7 @@ devices.post('/notification_all', function (req, res) {
  * Description : This route lets the frontend application display how many devices have been rented so far.
  */
 devices.get('/rented_all_time', async function (req, res) {
-  // An object is initialized.
-  // let data = {};
-
-  // const listOfRentedEntries = await DeviceModel.find({
-  //   'rentalHistory.0': { $exists: true },
-  // });
-
-  // // console.log(listOfRentedEntries.length);
-
-  // if (listOfRentedEntries.length === 0) {
-  //   res.send({
-  //     status: 'Error',
-  //     msg: 'Data of rented entries could not be loaded',
-  //     data,
-  //   });
-  // } else {
-  //   data = listOfRentedEntries;
-  //   res.send({ status: 'OK', msg: 'Info found', data });
-  // }
-
+  const io = getIo(); // Access 'io' from the Express app
   let data = [];
   await DeviceModel.aggregate([
     {
@@ -579,6 +642,8 @@ devices.get('/rented_all_time', async function (req, res) {
     // console.log('Total number of rentals:', results[0].totalCount);
     data = results[0].totalCount;
   });
+  // Emit a Socket.io event to notify clients of the updated list of rented devices
+  io.sockets.emit('rentedAllTime', data);
   res.send({ status: 'OK', msg: 'Info found', data });
 });
 
@@ -590,6 +655,7 @@ devices.get('/rented_all_time', async function (req, res) {
  * Description : This route lets the frontend application display how many devices have been rented so far.
  */
 devices.get('/available', async function (req, res) {
+  const io = getIo(); // Access 'io' from the Express app
   // Inside the records
   const availableIpads = await DeviceModel.find({
     available: true,
@@ -599,20 +665,359 @@ devices.get('/available', async function (req, res) {
     available: true,
     deviceType: 'ChromeBook',
   });
+  const availableCalculators = await DeviceModel.find({
+    available: true,
+    deviceType: 'Calculator',
+  });
 
-  if (availableIpads.length === 0 || availableChromebooks.length === 0) {
+  if (
+    availableIpads.length === 0 ||
+    availableChromebooks.length === 0 ||
+    availableCalculators.length === 0
+  ) {
     res.send({
       status: 'Error',
       msg: 'Availability information for devices could not be fetched from the database. Please contact ICT Support.',
     });
   } else {
+    io.sockets.emit('devicesCount', {
+      iPads: availableIpads,
+      chromeBooks: availableChromebooks,
+      calculators: availableCalculators,
+    });
+
     res.send({
       status: 'OK',
       msg: 'Availability information for all devices was found succesfully.',
       availableChromebooks,
       availableIpads,
+      availableCalculators,
     });
   }
 });
 
+/**
+ * 10)
+ * Name : Rent calculators
+ * Method : POST
+ * Route : /rent-calc
+ * Description : This route is going to manage the rent of devices. Information from the user is going to come from frontend and the device will be registered as rented with all of its implications in the corresponding collections.
+ */
+devices.post('/rent-calc', async function (req, res) {
+  const { user, admin } = req.body;
+
+  // First the user input needs to be validated to check that the object contains all necessary info.
+  if (!user || !user.document || !user.device || !user.number) {
+    res.send({
+      status: 'Error',
+      msg: 'Invalid user input. Please check all the fields and try again.',
+    });
+  }
+
+  console.log(
+    `${getDateAndTime()}: Calculator renting process started by ${admin}. The ${
+      user.device + ' #' + user.number
+    } is expected to be assigned to the user ${user.document}.`
+  );
+  // Then it checks if the user exists
+  const userExists = await UserModel.findOne({
+    document: Number(user.document),
+  });
+  // If the user doesn't exist, then the client is notified on its side.
+  if (!userExists) {
+    console.log(
+      `${getDateAndTime()}: Process finished unsuccesfully as user does not exist.`
+    );
+    res.send({
+      status: 'Error',
+      msg: `The ${user.document} doesn't seem to appear in our database.`,
+    });
+    // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
+  } else if (userExists.hasCalculatorRented) {
+    console.log(
+      `${getDateAndTime()}: Process finished unsuccesfully as user currently has a calculator rented.`
+    );
+    res.send({
+      status: 'Error',
+      msg: `The user ${userExists.name} ${userExists.lastName} with document ${userExists.document} currently has a calculator rented.`,
+    });
+  } else {
+    // After that, the requested calculator is searched in the database collection.
+    const requestedCalc = await DeviceModel.findOne({
+      deviceType: user.device,
+      deviceNumber: Number(user.number),
+    });
+    // If the calculator is not available, then the client is notified in its side.
+    if (
+      !requestedCalc ||
+      requestedCalc.available === null ||
+      requestedCalc.available === undefined ||
+      !requestedCalc.available
+    ) {
+      console.log(
+        `${getDateAndTime()}: Process finished unsuccesfully since calculator is not available for rent.`
+      );
+      res.send({
+        status: 'Error',
+        msg: `The ${user.device} ${user.number} doesn't seem to be available for rent in this moment.`,
+      });
+    } else {
+      // If instead, it is available, then the calculator is updated in the devices collection
+      await DeviceModel.updateOne(
+        {
+          deviceType: user.device,
+          deviceNumber: Number(user.number),
+        },
+        {
+          $set: {
+            dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+            dateReturned: null,
+            available: false,
+            conditions: user.conditions,
+            userDocument: user.document,
+          },
+          $push: {
+            rentalHistory: {
+              userDocument: user.document,
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              dateReturned: null,
+              conditions: user.conditions,
+            },
+          },
+        }
+      );
+
+      // The user who is going to rent the device is also updated in the users collection.
+      await UserModel.updateOne(
+        { document: user.document },
+        {
+          $set: { hasCalculatorRented: true },
+          $push: {
+            calculatorHistory: {
+              calculator: user.device + ' ' + user.number,
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              dateReturned: null,
+              conditions: user.conditions,
+            },
+          },
+        }
+      );
+      // A confirmation message is declarated which will be then sent to the user who rents the device. Also a confirmation message is sent to client side.
+      const message = `Dear ${userExists.name} ${userExists.lastName},\nYou have rented the ${user.device} #${user.number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
+      // sendEmail(userExists.email, message);
+      // console.log(
+      //   `${getDateAndTime()}: Calculator renting process finished succesfully by ${admin}`
+      // );
+      // res.send({ status: 'OK', msg: 'Calculator rented successfully.' });
+      sendEmail(userExists.email, message)
+        .then(() => {
+          console.log(
+            `${getDateAndTime()}: Calculator renting process finished successfully by ${admin}`
+          );
+
+          res.send({
+            status: 'OK',
+            msg: 'Calculator rented successfully.',
+          });
+        })
+        .catch((error) => {
+          console.error('Error sending email:', error);
+
+          // If there's an error sending the email, you can handle it accordingly
+          res.status(500).send({
+            status: 'Error',
+            msg: 'An error occurred while sending the email.',
+          });
+        });
+    }
+  }
+});
+
+/**
+ * 11)
+ * Name : Return calculator
+ * Method : POST
+ * Route : /return-calc
+ * Description : This route is going to unassign a calculator to a user. That's why it doesn't need to receive too much information from front end.
+ */
+devices.post('/return-calc', async function (req, res) {
+  // The type of device and number are received from frontend.
+  const { number, admin } = req.body;
+
+  // First the user input needs to be validated to check that the necessary info is received.
+  if (!number) {
+    res.send({
+      status: 'Error',
+      msg: 'Invalid data. Please check that calculator info is sent correctly and try again.',
+    });
+  } else {
+    console.log(
+      `${getDateAndTime()}: Calculator return process started by ${admin}. The Calculator # ${number} is expected to be returned.`
+    );
+    // If inputs are ok, then the device is searched in its respective collection.
+    const rentedDevice = await DeviceModel.findOne({
+      deviceType: 'Calculator',
+      deviceNumber: Number(number),
+    });
+    // If the calculator is not found in the collection, then a message is sent explaining that there are no active records with the requested data.
+    if (!rentedDevice) {
+      console.log(
+        `${getDateAndTime()}: Calculator was not found in the database.`
+      );
+      res.send({
+        status: 'Error',
+        msg: `The Calculator # ${number} was not found in our database.`,
+      });
+    } else if (rentedDevice.available) {
+      console.log(
+        `${getDateAndTime()}: Calculator is not registered as rented in the database.`
+      );
+      // If the calculator is available, then it means that it was not registered as rented in first place so a message is sent to client.
+      res.send({
+        status: 'Error',
+        msg: `The Calculator # ${number} does not seem to register as rented in the database.`,
+      });
+    } else {
+      // If, instead, all conditions are met and validations are ok, we proceed to return the calculator. To do this, the user that has the calculator rented is stored in a variable to be used later.
+      const userThatRented = await UserModel.findOne({
+        document: rentedDevice.userDocument,
+      });
+      // Its existence needs to be validated first. If it does not exist then a message is sent to client.
+      if (!userThatRented) {
+        res.send({
+          status: 'Error',
+          msg: `The user was not found in our database.`,
+        });
+      } else {
+        // After validating everything we update the user in the users collection. (It sets the hasCalculatorRented to false and pushes the necessary information into the calculatorHistory array.)
+        await UserModel.updateOne(
+          { document: rentedDevice.userDocument },
+          {
+            $set: { hasCalculatorRented: false },
+            $push: {
+              calculatorHistory: {
+                calculator: 'Calculator #' + number,
+                dateRented: null,
+                dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                conditions: null,
+              },
+            },
+          }
+        );
+        // We also update the device to be returned in the devices collection. (It updates it to available again and pushes the necessary information in the rentalHistory array.)
+        await DeviceModel.updateOne(
+          { deviceType: 'Calculator', deviceNumber: Number(number) },
+          {
+            $set: {
+              available: true,
+              conditions: 'none',
+              userDocument: 0,
+              dateRented: null,
+              dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+            },
+            $push: {
+              rentalHistory: {
+                userDocument: userThatRented.document,
+                dateRented: null,
+                dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                conditions: userThatRented.conditions,
+              },
+            },
+          }
+        );
+
+        // Conditions of how the device rented was given in are stated.
+        // const conditions = rentedDevice.conditions;
+        // The message to be sent to the user by email is stated.
+        const message = `Dear user,\nYou returned the Calculator # ${number} to the Knowledge Centre successfully. Thank you for using our service.`;
+        // The email is sent the person who returned the device followed by the message written above. That's why the userThatRented object is taken from the collection.
+        // sendEmail(userThatRented.email, message);
+        // console.log(
+        //   `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
+        //     rentedDevice.deviceNumber
+        //   } rented by ${userThatRented.name} ${
+        //     userThatRented.lastName
+        //   } was returned successfully. Process finished succesfully by ${admin}.`
+        // );
+        // res.send({
+        //   status: 'OK',
+        //   msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully.`,
+        // });
+        sendEmail(userThatRented.email, message)
+          .then(() => {
+            console.log(
+              `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
+                rentedDevice.deviceNumber
+              } rented by ${userThatRented.name} ${
+                userThatRented.lastName
+              } was returned successfully. Process finished successfully by ${admin}.`
+            );
+
+            res.send({
+              status: 'OK',
+              msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully.`,
+            });
+          })
+          .catch((error) => {
+            console.error('Error sending email:', error);
+
+            // Notify the user about the successful return even if there's an issue with sending the email
+            res.send({
+              status: 'OK',
+              msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully. However, there was an issue notifying the user by email.`,
+            });
+          });
+      }
+    }
+  }
+});
+
+/**
+ * 12)
+ * Name : Rented calculators
+ * Method : get
+ * Route : /rented-calcs
+ * Description : This route is going to send the rented calculators to client.
+ */
+devices.get('/rented-calcs', async function (req, res) {
+  const io = getIo(); // Access 'io' from the Express app
+  // The list of rented devices and of actives users are assigned from their respectiv collections.
+  const rentedDevices = await DeviceModel.find({
+    deviceType: 'Calculator',
+    available: false,
+  });
+  const activeOnes = await UserModel.find({ hasCalculatorRented: true });
+  // If there are no active users, then an empty array is sent to front side
+  if (!activeOnes) {
+    const listOfRentedCalculators = [];
+    res.status(500).send({
+      status: 'OK',
+      msg: 'There are no rented devices to be fetched.',
+      listOfRentedCalculators,
+    });
+    // If there are active devices the
+  } else {
+    const listOfRentedCalculators = await activeOnes.map((user) => {
+      const calculatorExists = rentedDevices.find(
+        (device) => device.userDocument === user.document
+      );
+      if (calculatorExists) {
+        const activeUser = {
+          ...user._doc, // copy all properties of the user object
+          device: calculatorExists.deviceType,
+          number: calculatorExists.deviceNumber,
+          conditions: calculatorExists.conditions,
+          date: calculatorExists.dateRented,
+        };
+        return activeUser;
+      }
+      return user;
+    });
+    // console.log(listOfRentedCalculators);
+
+    io.sockets.emit('rentedCalcs', listOfRentedCalculators);
+    res.send({ status: 'ok', msg: 'Info found', listOfRentedCalculators });
+  }
+});
+// };
 exports.devices = devices;

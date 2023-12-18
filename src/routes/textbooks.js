@@ -3,6 +3,7 @@ const textbooks = Router();
 const { UserModel } = require('../models/userModel');
 const { TextBookModel } = require('../models/textBookModel');
 const nodemailer = require('nodemailer');
+const { getIo } = require('../socket');
 
 /**
  * X)
@@ -113,31 +114,35 @@ const nodemailer = require('nodemailer');
  * Description : This function is meant to be used each time a notification via email needs to be sent to any user. The function receives a list of emails and a message.
  */
 function sendEmail(emailList, msg) {
-  // Via the nodemailer package, a transporter is created.
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'kc@britishschool.edu.co',
-      pass: `${process.env.password}`,
-    },
-  });
+  return new Promise((resolve, reject) => {
+    // Via the nodemailer package, a transporter is created.
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'kc@britishschool.edu.co',
+        pass: `${process.env.password}`,
+      },
+    });
 
-  // All the information that goes in the email is written here.
-  const mailOptions = {
-    from: 'kc@britishschool.edu.co',
-    to: emailList,
-    subject: 'Knowledge Centre Notification',
-    text:
-      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-  };
+    // All the information that goes in the email is written here.
+    const mailOptions = {
+      from: 'kc@britishschool.edu.co',
+      to: emailList,
+      subject: 'Knowledge Centre Notification',
+      text:
+        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
+    };
 
-  // The email is sent
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-    } else {
-      console.log(`Email sent to ${emailList}`);
-    }
+    // The email is sent
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.error(error);
+        reject(error);
+      } else {
+        console.log('Email sent:', info.response);
+        resolve(info);
+      }
+    });
   });
 }
 
@@ -184,7 +189,7 @@ textbooks.post('/loadStudent', async function (req, res) {
   }
 
   console.log(
-    `User textbook search was started by: ${admin} for the following document: ${document}`
+    `${getDateAndTime()}: User textbook search was started by: ${admin} for the following document: ${document}`
   );
 
   const student = await UserModel.findOne({
@@ -193,6 +198,7 @@ textbooks.post('/loadStudent', async function (req, res) {
 
   const rentedTextBooks = await TextBookModel.find({ userDocument: document });
 
+  console.log('Textbooks found: ');
   rentedTextBooks.forEach((text) =>
     console.log(text.title + ' # ' + text.number)
   );
@@ -215,7 +221,9 @@ textbooks.post('/loadStudent', async function (req, res) {
       )
     : console.log(`No rented textbooks were found. Array will be sent empty.`);
 
-  console.log(`User textbook search finished by: ${admin}.`);
+  console.log(
+    `${getDateAndTime()}: User textbook search finished by: ${admin}.`
+  );
   res.send({ status, msg, student, rentedTextBooks });
 });
 
@@ -235,7 +243,9 @@ textbooks.post('/assign', async function (req, res) {
       msg: 'No information regarding textbooks was received. Please contact ICT Support.',
     });
   }
-  console.log(`Textbook assignment was started by: ${admin}`);
+  console.log(
+    `${getDateAndTime()}: Textbook assignment was started by: ${admin}`
+  );
 
   const listOfTextbooks = [];
   const errorMessages = [];
@@ -334,7 +344,9 @@ textbooks.post('/assign', async function (req, res) {
     }, \nYou have been assigned the following textbooks for the current school year: \n\n${listOfTextbooks} \nPlease remember to take care of them and use them with responsibility.\nThanks for using our service.\nRegards,`;
 
     sendEmail([student.email, 'kc@britishschool.edu.co'], message);
-    console.log(`Textbook assignment was completed successfully by: ${admin}`);
+    console.log(
+      `${getDateAndTime()}: Textbook assignment was completed successfully by: ${admin}`
+    );
 
     return res.send({
       status: 'ok',
@@ -360,6 +372,7 @@ textbooks.post('/assign', async function (req, res) {
  * Description : This route sends an array of rented textbooks and their active users.
  */
 textbooks.get('/rented', async function (req, res) {
+  const io = getIo(); // Access 'io' from the Express app
   const userMap = new Map();
 
   const rentedTextBooks = await TextBookModel.find({ available: false });
@@ -367,64 +380,6 @@ textbooks.get('/rented', async function (req, res) {
   const usersWithTextbooks = await UserModel.find({
     'textbookHistory.0': { $exists: true, $ne: [] },
   });
-
-  // const documents = [];
-  // rentedTextBooks.forEach((textbook) => documents.push(textbook.userDocument));
-
-  // console.log('Documents length: ' + documents.length);
-
-  // const documentsSet = new Set(documents);
-
-  // const finalDocuments = Array.from(documentsSet.values());
-
-  // console.log('Final Documents length: ' + finalDocuments.length);
-
-  // // finalDocuments.forEach((document) => console.log(document));
-
-  // console.log('Users with textbooks total: ' + usersWithTextbooks.length);
-
-  // const pipeline = [
-  //   {
-  //     $match: {
-  //       available: false,
-  //     },
-  //   },
-  //   {
-  //     $group: {
-  //       _id: '$userDocument',
-  //     },
-  //   },
-  //   {
-  //     $group: {
-  //       _id: null,
-  //       count: { $sum: 1 },
-  //     },
-  //   },
-  // ];
-
-  // const aggregation = TextBookModel.aggregate(pipeline);
-
-  // aggregation.exec((err, result) => {
-  //   if (err) {
-  //     console.error(err);
-  //   } else {
-  //     console.log(result);
-  //   }
-  // });
-
-  // // const missingDocuments = [];
-
-  // const userDocumentSet = new Set(
-  //   usersWithTextbooks.map((user) => user.document)
-  // );
-
-  // const missingDocuments = finalDocuments.filter(
-  //   (document) => !userDocumentSet.has(document)
-  // );
-
-  // console.log('Filtered documents length: ' + missingDocuments.length);
-
-  // missingDocuments.forEach((doc) => console.log(doc));
 
   for (const user of usersWithTextbooks) {
     // The textbooks rented by the student are filtered
@@ -463,8 +418,7 @@ textbooks.get('/rented', async function (req, res) {
 
   // Convert the map values (unique users) to an array
   const users = Array.from(userMap.values());
-  // console.log(users.length);
-  // console.log(data.length);
+  io.sockets.emit('rentedTextbooks', users);
   res.send({
     status: 'OK',
     msg: 'Rented textbooks fetched succesfully',

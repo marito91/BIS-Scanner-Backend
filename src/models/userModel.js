@@ -39,6 +39,10 @@ const userSchema = new Schema(
       type: 'boolean',
       required: true,
     },
+    hasCalculatorRented: {
+      type: 'boolean',
+      required: true,
+    },
     deviceHistory: {
       type: 'array',
       default: [
@@ -84,11 +88,30 @@ const userSchema = new Schema(
       type: 'array',
       default: [
         {
-          textbook: {
+          calculator: {
             type: 'string',
           },
           number: {
             type: 'number',
+          },
+          dateRented: {
+            type: Date,
+          },
+          dateReturned: {
+            type: Date,
+          },
+          conditions: {
+            type: String,
+          },
+        },
+      ],
+    },
+    calculatorHistory: {
+      type: 'array',
+      default: [
+        {
+          calculator: {
+            type: 'string',
           },
           dateRented: {
             type: Date,

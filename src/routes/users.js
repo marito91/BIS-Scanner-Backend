@@ -19,28 +19,35 @@ const nodemailer = require('nodemailer');
  * Description : The purpose of this function is to be in charge of sending emails/notifications to users. It receives an array with an email list along with the message that will be sent to that list.
  */
 function sendEmail(emailList, msg) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'kc@britishschool.edu.co',
-      pass: `${process.env.password}`,
-    },
-  });
+  return new Promise((resolve, reject) => {
+    // Via the nodemailer package, a transporter is created.
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'kc@britishschool.edu.co',
+        pass: `${process.env.password}`,
+      },
+    });
 
-  const mailOptions = {
-    from: 'kc@britishschool.edu.co',
-    to: emailList,
-    subject: 'Knowledge Centre Notification',
-    text:
-      msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-  };
+    // All the information that goes in the email is written here.
+    const mailOptions = {
+      from: 'kc@britishschool.edu.co',
+      to: emailList,
+      subject: 'Knowledge Centre Notification',
+      text:
+        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
+    };
 
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-    } else {
-      console.log('Email sent: ' + info.response);
-    }
+    // The email is sent
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.error(error);
+        reject(error);
+      } else {
+        console.log('Email sent:', info.response);
+        resolve(info);
+      }
+    });
   });
 }
 
