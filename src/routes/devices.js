@@ -2,8 +2,13 @@ const { Router } = require('express');
 const devices = Router();
 const { DeviceModel } = require('../models/deviceModel');
 const { UserModel } = require('../models/userModel');
-const nodemailer = require('nodemailer');
+// const nodemailer = require('nodemailer');
 const { getIo } = require('../socket');
+const {
+  insertLogIntoDatabase,
+  sendEmail,
+  getDateAndTime,
+} = require('../helpers');
 
 /**
  * This file contains all the routes related to device management in the application.
@@ -12,70 +17,6 @@ const { getIo } = require('../socket');
  * Nodemailer is used as a mail manager to send notifications to users.
  */
 
-/**
- * X)
- * Name : Send Email
- * Method : Local Function
- * Route : None
- * Params : Array with a list of emails and a string with the message to be sent.
- * Description : This function is meant to be used each time a notification via email needs to be sent to any user. The function receives a list of emails and a message.
- */
-function sendEmail(emailList, msg) {
-  return new Promise((resolve, reject) => {
-    // Via the nodemailer package, a transporter is created.
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'kc@britishschool.edu.co',
-        pass: `${process.env.password}`,
-      },
-    });
-
-    // All the information that goes in the email is written here.
-    const mailOptions = {
-      from: 'kc@britishschool.edu.co',
-      to: emailList,
-      subject: 'Knowledge Centre Notification',
-      text:
-        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-    };
-
-    // The email is sent
-    transporter.sendMail(mailOptions, function (error, info) {
-      if (error) {
-        console.error(error);
-        reject(error);
-      } else {
-        console.log('Email sent:', info.response);
-        resolve(info);
-      }
-    });
-  });
-}
-
-/**
- * X) Function date
- * Name : Get current date and time
- * METHOD : Local
- * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
- */
-
-function getDateAndTime() {
-  let today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
-  const yyyy = today.getFullYear();
-  const h = String(today.getHours());
-  const m = String(today.getMinutes()).padStart(2, '0');
-
-  // Gets current date in mm/dd/yyyy format
-  today = mm + '/' + dd + '/' + yyyy;
-  // Gets current time
-  const time = h + ':' + m;
-
-  return [today, time];
-}
-// module.exports = (io) => {
 /**
  * 1)
  * Name : Rent devices
@@ -94,6 +35,13 @@ devices.post('/rent', async function (req, res) {
     });
   }
 
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Device renting process started by ${admin}. The ${
+      user.device + ' #' + user.number
+    } is expected to be assigned to the user ${user.document}.`
+  );
   console.log(
     `${getDateAndTime()}: Device renting process started by ${admin}. The ${
       user.device + ' #' + user.number
@@ -104,111 +52,139 @@ devices.post('/rent', async function (req, res) {
   const userExists = await UserModel.findOne({
     document: Number(user.document),
   });
-  // If the user doesn't exist, then the client is notified on its side.
-  if (!userExists) {
-    console.log(
-      `${getDateAndTime()}: Process finished unsuccesfully as user does not exist.`
-    );
-    res.send({
-      status: 'Error',
-      msg: `The ${user.document} doesn't seem to appear in our database.`,
-    });
-    // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
-  } else if (userExists.hasDeviceRented) {
-    console.log(
-      `${getDateAndTime()}: Process finished unsuccesfully as user currently has a device rented.`
-    );
-    res.send({
-      status: 'Error',
-      msg: `The user ${userExists.name} ${userExists.lastName} with document ${userExists.document} currently has a device rented.`,
-    });
-  } else {
-    // After that, the requested device is searched in the database collection.
-    const requestedDevice = await DeviceModel.findOne({
-      deviceType: user.device,
-      deviceNumber: Number(user.number),
-    });
-    // If the device is not available, then the client is notified in its side.
-    if (
-      !requestedDevice ||
-      requestedDevice.available === null ||
-      requestedDevice.available === undefined ||
-      !requestedDevice.available
-    ) {
+  try {
+    // If the user doesn't exist, then the client is notified on its side.
+    if (!userExists) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Process finished unsuccesfully as user does not exist.`
+      );
       console.log(
-        `${getDateAndTime()}: Process finished unsuccesfully since device is not available for rent.`
+        `${getDateAndTime()}: Process finished unsuccesfully as user does not exist.`
       );
       res.send({
         status: 'Error',
-        msg: `The ${user.device} ${user.number} doesn't seem to be available for rent in this moment.`,
+        msg: `The ${user.document} doesn't seem to appear in our database.`,
+      });
+      // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
+    } else if (userExists.hasDeviceRented) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Process finished unsuccesfully as user currently has a device rented.`
+      );
+      console.log(
+        `${getDateAndTime()}: Process finished unsuccesfully as user currently has a device rented.`
+      );
+      res.send({
+        status: 'Error',
+        msg: `The user ${userExists.name} ${userExists.lastName} with document ${userExists.document} currently has a device rented.`,
       });
     } else {
-      // If instead, it is available, then the device is updated in the devices collection
-      await DeviceModel.updateOne(
-        {
-          deviceType: user.device,
-          deviceNumber: Number(user.number),
-        },
-        {
-          $set: {
-            dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-            dateReturned: null,
-            available: false,
-            conditions: user.conditions,
-            userDocument: user.document,
-          },
-          $push: {
-            rentalHistory: {
-              userDocument: user.document,
-              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-              dateReturned: null,
-              conditions: user.conditions,
-            },
-          },
-        }
-      );
-
-      // The user who is going to rent the device is also updated in the users collection.
-      await UserModel.updateOne(
-        { document: user.document },
-        {
-          $set: { hasDeviceRented: true },
-          $push: {
-            deviceHistory: {
-              device: user.device + ' ' + user.number,
-              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
-              dateReturned: null,
-              conditions: user.conditions,
-            },
-          },
-        }
-      );
-      // A confirmation message is declarated which will be then sent to the user who rents the device. Also a confirmation message is sent to client side.
-      const message = `Dear ${userExists.name} ${userExists.lastName},\nYou have rented the ${user.device} #${user.number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
-      // sendEmail(userExists.email, message);
-      // console.log(
-      //   `${getDateAndTime()}: Renting process finished succesfully by ${admin}`
-      // );
-
-      // res.send({ status: 'OK', msg: 'Device rented successfully.' });
-      sendEmail(userExists.email, message)
-        .then(() => {
-          console.log(
-            `${getDateAndTime()}: Renting process finished successfully by ${admin}`
-          );
-
-          res.send({ status: 'OK', msg: 'Device rented successfully.' });
-        })
-        .catch((error) => {
-          console.error('Error sending email:', error);
-
-          // If there's an error sending the email, you can still consider the renting process finished, but with a notification about the email issue
-          res.send({
-            status: 'OK',
-            msg: 'Device rented, but there was an issue sending the confirmation email.',
-          });
+      // After that, the requested device is searched in the database collection.
+      const requestedDevice = await DeviceModel.findOne({
+        deviceType: user.device,
+        deviceNumber: Number(user.number),
+      });
+      // If the device is not available, then the client is notified in its side.
+      if (
+        !requestedDevice ||
+        requestedDevice.available === null ||
+        requestedDevice.available === undefined ||
+        !requestedDevice.available
+      ) {
+        insertLogIntoDatabase(
+          getDateAndTime()[0],
+          getDateAndTime()[1],
+          `Process finished unsuccesfully since device is not available for rent.`
+        );
+        console.log(
+          `${getDateAndTime()}: Process finished unsuccesfully since device is not available for rent.`
+        );
+        res.send({
+          status: 'Error',
+          msg: `The ${user.device} ${user.number} doesn't seem to be available for rent in this moment.`,
         });
+      } else {
+        // If instead, it is available, then the device is updated in the devices collection
+        await DeviceModel.updateOne(
+          {
+            deviceType: user.device,
+            deviceNumber: Number(user.number),
+          },
+          {
+            $set: {
+              dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              dateReturned: null,
+              available: false,
+              conditions: user.conditions,
+              userDocument: user.document,
+            },
+            $push: {
+              rentalHistory: {
+                userDocument: user.document,
+                dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                dateReturned: null,
+                conditions: user.conditions,
+              },
+            },
+          }
+        );
+
+        // The user who is going to rent the device is also updated in the users collection.
+        await UserModel.updateOne(
+          { document: user.document },
+          {
+            $set: { hasDeviceRented: true },
+            $push: {
+              deviceHistory: {
+                device: user.device + ' ' + user.number,
+                dateRented: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+                dateReturned: null,
+                conditions: user.conditions,
+              },
+            },
+          }
+        );
+        // A confirmation message is declarated which will be then sent to the user who rents the device. Also a confirmation message is sent to client side.
+        const message = `Dear ${userExists.name} ${userExists.lastName},\nYou have rented the ${user.device} #${user.number} from the Knowledge Centre. Remember to return it by the end of the day.\nThank you very much for using our service.\nRegards,`;
+        // sendEmail(userExists.email, message);
+        // console.log(
+        //   `${getDateAndTime()}: Renting process finished succesfully by ${admin}`
+        // );
+
+        // res.send({ status: 'OK', msg: 'Device rented successfully.' });
+        sendEmail(userExists.email, message)
+          .then(() => {
+            console.log(
+              `${getDateAndTime()}: Renting process finished successfully by ${admin}`
+            );
+            insertLogIntoDatabase(
+              getDateAndTime()[0],
+              getDateAndTime()[1],
+              `Renting process finished successfully by ${admin}.`
+            );
+
+            res.send({ status: 'OK', msg: 'Device rented successfully.' });
+          })
+          .catch((error) => {
+            console.error('Error sending email:', error);
+
+            // If there's an error sending the email, you can still consider the renting process finished, but with a notification about the email issue
+            res.send({
+              status: 'OK',
+              msg: 'Device rented, but there was an issue sending the confirmation email.',
+            });
+          });
+      }
     }
+  } catch (error) {
+    console.error('An error occurred:', error);
+    res.status(500).send({
+      status: 'Error',
+      msg: 'An internal server error occurred.',
+    });
   }
 });
 
@@ -230,6 +206,13 @@ devices.post('/return', async function (req, res) {
       msg: 'Invalid user input. Please check that device type and number are entered correctly and try again.',
     });
   } else {
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Device return process started by ${admin}. The ${
+        device + ' #' + number
+      } is expected to be returned.`
+    );
     console.log(
       `${getDateAndTime()}: Device return process started by ${admin}. The ${
         device + ' #' + number
@@ -242,12 +225,22 @@ devices.post('/return', async function (req, res) {
     });
     // If the device is not found in the collection, then a message is sent explaining that there are no active records with the requested data.
     if (!rentedDevice) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Device was not found in the database.`
+      );
       console.log(`${getDateAndTime()}: Device was not found in the database.`);
       res.send({
         status: 'Error',
         msg: `The ${device} #${number} was not found in our database.`,
       });
     } else if (rentedDevice.available) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Device is not registered as rented in the database.`
+      );
       console.log(
         `${getDateAndTime()}: Device is not registered as rented in the database.`
       );
@@ -309,21 +302,13 @@ devices.post('/return', async function (req, res) {
         // const conditions = rentedDevice.conditions;
         // The message to be sent to the user by email is stated.
         const message = `Dear user,\nYou returned the ${device} #${number} to the Knowledge Centre successfully. Thank you for using our service.`;
-        // The email is sent the person who returned the device followed by the message written above. That's why the userThatRented object is taken from the collection.
-        // sendEmail(userThatRented.email, message);
-        // console.log(
-        //   `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
-        //     rentedDevice.deviceNumber
-        //   } rented by ${userThatRented.name} ${
-        //     userThatRented.lastName
-        //   } was returned successfully. Process finished succesfully by ${admin}.`
-        // );
-        // res.send({
-        //   status: 'OK',
-        //   msg: `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully.`,
-        // });
         sendEmail(userThatRented.email, message)
           .then(() => {
+            insertLogIntoDatabase(
+              getDateAndTime()[0],
+              getDateAndTime()[1],
+              `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully. Process finished successfully by ${admin}.`
+            );
             console.log(
               `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
                 rentedDevice.deviceNumber
@@ -714,6 +699,13 @@ devices.post('/rent-calc', async function (req, res) {
     });
   }
 
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Calculator renting process started by ${admin}. The ${
+      user.device + ' #' + user.number
+    } is expected to be assigned to the user ${user.document}.`
+  );
   console.log(
     `${getDateAndTime()}: Calculator renting process started by ${admin}. The ${
       user.device + ' #' + user.number
@@ -725,6 +717,11 @@ devices.post('/rent-calc', async function (req, res) {
   });
   // If the user doesn't exist, then the client is notified on its side.
   if (!userExists) {
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Process finished unsuccesfully as user does not exist.`
+    );
     console.log(
       `${getDateAndTime()}: Process finished unsuccesfully as user does not exist.`
     );
@@ -734,6 +731,11 @@ devices.post('/rent-calc', async function (req, res) {
     });
     // If the user exists, then it checks if it has a device rented already. If it does, the client is notified on its side.
   } else if (userExists.hasCalculatorRented) {
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Process finished unsuccesfully as user currently has a calculator rented.`
+    );
     console.log(
       `${getDateAndTime()}: Process finished unsuccesfully as user currently has a calculator rented.`
     );
@@ -754,6 +756,11 @@ devices.post('/rent-calc', async function (req, res) {
       requestedCalc.available === undefined ||
       !requestedCalc.available
     ) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Process finished unsuccesfully since calculator is not available for rent.`
+      );
       console.log(
         `${getDateAndTime()}: Process finished unsuccesfully since calculator is not available for rent.`
       );
@@ -811,6 +818,11 @@ devices.post('/rent-calc', async function (req, res) {
       // res.send({ status: 'OK', msg: 'Calculator rented successfully.' });
       sendEmail(userExists.email, message)
         .then(() => {
+          insertLogIntoDatabase(
+            getDateAndTime()[0],
+            getDateAndTime()[1],
+            `Calculator renting process finished successfully by ${admin}.`
+          );
           console.log(
             `${getDateAndTime()}: Calculator renting process finished successfully by ${admin}`
           );
@@ -851,6 +863,11 @@ devices.post('/return-calc', async function (req, res) {
       msg: 'Invalid data. Please check that calculator info is sent correctly and try again.',
     });
   } else {
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Calculator return process started by ${admin}. The Calculator # ${number} is expected to be returned.`
+    );
     console.log(
       `${getDateAndTime()}: Calculator return process started by ${admin}. The Calculator # ${number} is expected to be returned.`
     );
@@ -861,6 +878,11 @@ devices.post('/return-calc', async function (req, res) {
     });
     // If the calculator is not found in the collection, then a message is sent explaining that there are no active records with the requested data.
     if (!rentedDevice) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Calculator was not found in the database.`
+      );
       console.log(
         `${getDateAndTime()}: Calculator was not found in the database.`
       );
@@ -869,6 +891,11 @@ devices.post('/return-calc', async function (req, res) {
         msg: `The Calculator # ${number} was not found in our database.`,
       });
     } else if (rentedDevice.available) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Calculator is not registered as rented in the database.`
+      );
       console.log(
         `${getDateAndTime()}: Calculator is not registered as rented in the database.`
       );
@@ -945,6 +972,11 @@ devices.post('/return-calc', async function (req, res) {
         // });
         sendEmail(userThatRented.email, message)
           .then(() => {
+            insertLogIntoDatabase(
+              getDateAndTime()[0],
+              getDateAndTime()[1],
+              `The ${rentedDevice.deviceType} #${rentedDevice.deviceNumber} rented by ${userThatRented.name} ${userThatRented.lastName} was returned successfully. Process finished successfully by ${admin}.`
+            );
             console.log(
               `${getDateAndTime()}: The ${rentedDevice.deviceType} #${
                 rentedDevice.deviceNumber
@@ -1020,4 +1052,5 @@ devices.get('/rented-calcs', async function (req, res) {
   }
 });
 // };
+
 exports.devices = devices;

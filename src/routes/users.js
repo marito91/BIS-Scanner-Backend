@@ -4,7 +4,7 @@ const { AdminModel } = require('../models/adminModel');
 const { UserModel } = require('../models/userModel');
 const { compare } = require('bcryptjs');
 const { sign } = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const { sendEmail } = require('../helpers');
 
 /**
  * This file contains all the routes related to user management in the application.
@@ -12,44 +12,6 @@ const nodemailer = require('nodemailer');
  * It imports users using router express, bcryptjs compare for encrypted keys, and jsonwebtoken to send information to front via tokens.
  * Nodemailer is used as a mail manager to send notifications to users.
  */
-
-/**
- * X)
- * Name : Send Email
- * Description : The purpose of this function is to be in charge of sending emails/notifications to users. It receives an array with an email list along with the message that will be sent to that list.
- */
-function sendEmail(emailList, msg) {
-  return new Promise((resolve, reject) => {
-    // Via the nodemailer package, a transporter is created.
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'kc@britishschool.edu.co',
-        pass: `${process.env.password}`,
-      },
-    });
-
-    // All the information that goes in the email is written here.
-    const mailOptions = {
-      from: 'kc@britishschool.edu.co',
-      to: emailList,
-      subject: 'Knowledge Centre Notification',
-      text:
-        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-    };
-
-    // The email is sent
-    transporter.sendMail(mailOptions, function (error, info) {
-      if (error) {
-        console.error(error);
-        reject(error);
-      } else {
-        console.log('Email sent:', info.response);
-        resolve(info);
-      }
-    });
-  });
-}
 
 /**
  * 1)
@@ -151,7 +113,7 @@ users.post('/signup', function (req, res) {
     'kcpromoter@britishschool.edu.co',
     'biblioteca@britishschool.edu.co',
     'jpmercado@britishschool.edu.co',
-    'ictdirector@britishschool.edu.co',
+    'aprendizkc@britishschool.edu.co',
   ];
 
   // It the list includes the requested email then it will search for an entry inside the database to check if it already exists.

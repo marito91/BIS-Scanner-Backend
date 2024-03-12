@@ -2,72 +2,13 @@ const { Router } = require('express');
 const books = Router();
 const { UserModel } = require('../models/userModel');
 const { BookModel } = require('../models/bookModel');
-const nodemailer = require('nodemailer');
 const NodeCache = require('node-cache');
 const booksCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
-
-/**
- * X)
- * Name : Send Email
- * Method : Local Function
- * Route : None
- * Params : Array with a list of emails and a string with the message to be sent.
- * Description : This function is meant to be used each time a notification via email needs to be sent to any user. The function receives a list of emails and a message.
- */
-function sendEmail(emailList, msg) {
-  return new Promise((resolve, reject) => {
-    // Via the nodemailer package, a transporter is created.
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'kc@britishschool.edu.co',
-        pass: `${process.env.password}`,
-      },
-    });
-
-    // All the information that goes in the email is written here.
-    const mailOptions = {
-      from: 'kc@britishschool.edu.co',
-      to: emailList,
-      subject: 'Knowledge Centre Notification',
-      text:
-        msg + '\n\nKC Services\nKnowledge Centre\nBritish International School',
-    };
-
-    // The email is sent
-    transporter.sendMail(mailOptions, function (error, info) {
-      if (error) {
-        console.error(error);
-        reject(error);
-      } else {
-        console.log('Email sent:', info.response);
-        resolve(info);
-      }
-    });
-  });
-}
-
-/**
- * X) Function date
- * Name : Get current date and time
- * METHOD : Local
- * This function lets the application set the current date and time each time that something is done. The function looks for the date and time and manages strings so that it returns the current date and time which will be then set for each process that requires it.
- */
-
-function getDateAndTime() {
-  let today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
-  const yyyy = today.getFullYear();
-  const h = String(today.getHours());
-  const m = String(today.getMinutes()).padStart(2, '0');
-
-  today = mm + '/' + dd + '/' + yyyy;
-  // Saca hora actual
-  const time = h + ':' + m;
-
-  return [today, time];
-}
+const {
+  insertLogIntoDatabase,
+  sendEmail,
+  getDateAndTime,
+} = require('../helpers');
 
 /**
  * 1)
@@ -80,6 +21,11 @@ books.post('/rent', async function (req, res) {
   // Document and barcode json come from frontend
   const { document, barcode, dueDate, admin } = req.body;
   console.log(`${getDateAndTime()}: Renting process started by ${admin}`);
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Renting process started by ${admin}`
+  );
 
   if (!document || !barcode || !dueDate) {
     res.send({
@@ -108,12 +54,24 @@ books.post('/rent', async function (req, res) {
   if (!userExists) {
     status = 'Error';
     msg = 'User does not exist.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process could not be completed because the user ${document} does not exist.`
+    );
     console.log(
       `${getDateAndTime()}: Renting process could not be completed because the user ${document} does not exist.`
     );
   } else if (userExists.blocked) {
     status = 'Error';
     msg = 'User has a fine that needs to be paid.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process could not be completed because ${
+        userExists.name + ' ' + userExists.lastName
+      }has a fine.`
+    );
     console.log(
       `${getDateAndTime()}: Renting process could not be completed because ${
         userExists.name + ' ' + userExists.lastName
@@ -122,6 +80,13 @@ books.post('/rent', async function (req, res) {
   } else if (userExists.hasBookRented) {
     status = 'Error';
     msg = 'The user currently has a book rented.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process could not be completed because ${
+        userExists.name + ' ' + userExists.lastName
+      } has a book rented.`
+    );
     console.log(
       `${getDateAndTime()}: Renting process could not be completed because ${
         userExists.name + ' ' + userExists.lastName
@@ -130,18 +95,37 @@ books.post('/rent', async function (req, res) {
   } else if (!bookExists) {
     status = 'Error';
     msg = 'Book is not registered in the database.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process could not be completed because the book ${barcode} is not registered in the database.`
+    );
     console.log(
       `${getDateAndTime()}: Renting process could not be completed because the book ${barcode} is not registered in the database.`
     );
   } else if (!bookExists.available) {
     status = 'Error';
     msg = 'This book is currently rented.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process could not be completed because the book ${bookExists.title} is rented by another person.`
+    );
     console.log(
       `${getDateAndTime()}: Renting process could not be completed because the book ${
         bookExists.title
       } is rented by another person.`
     );
   } else {
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `User and Book data validation was completed successfully. Book and User entries will be updated. The book ${
+        bookExists.title
+      } with barcode ${bookExists.barcode} is going to be assigned to ${
+        userExists.name + ' ' + userExists.lastName
+      } from ${userExists.grade} by ${admin}.`
+    );
     console.log(
       `${getDateAndTime()}: User and Book data validation was completed successfully. Book and User entries will be updated.`
     );
@@ -193,6 +177,11 @@ books.post('/rent', async function (req, res) {
     sendEmail(userExists.email, message);
     status = 'OK';
     msg = 'Book rented successfully.';
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Renting process finished succesfully by ${admin}`
+    );
     console.log(
       `${getDateAndTime()}: Renting process finished succesfully by ${admin}`
     );
@@ -209,6 +198,11 @@ books.post('/rent', async function (req, res) {
 books.post('/return', async function (req, res) {
   const { barcode, admin } = req.body;
   let dueDate = '';
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Book return process started by ${admin} for the barcode: ${barcode}.`
+  );
   console.log(
     `${getDateAndTime()}: Book return process started by ${admin} for the barcode: ${barcode}.`
   );
@@ -231,6 +225,11 @@ books.post('/return', async function (req, res) {
       status: 'Error',
       msg: `The book ${barcode} does not appear to be currently rented right now in the database. If you believe this is a mistake, please contact ICT Support.`,
     });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `Book return process could not be completed because the book does not appear in the database or is not available.`
+    );
     console.log(
       `${getDateAndTime()}: Book return process could not be completed because the book does not appear in the database or is not available.`
     );
@@ -241,6 +240,15 @@ books.post('/return', async function (req, res) {
       document: bookExists.userDocument,
     });
 
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The book ${bookExists.title} with barcode ${
+        bookExists.barcode
+      } is going to be returned by ${
+        userThatHasBook.name + ' ' + userThatHasBook.lastName
+      } from ${userThatHasBook.grade} by ${admin}.`
+    );
     console.log(
       `${getDateAndTime()}: The book ${bookExists.title} with barcode ${
         bookExists.barcode
@@ -297,6 +305,11 @@ books.post('/return', async function (req, res) {
     // The email is sent in the background
     sendEmail(userThatHasBook.email, message)
       .then(() => {
+        insertLogIntoDatabase(
+          getDateAndTime()[0],
+          getDateAndTime()[1],
+          `Book return process completed successfully by ${admin}`
+        );
         console.log(
           `${getDateAndTime()}: Book return process completed successfully by ${admin}`
         );
@@ -305,27 +318,6 @@ books.post('/return', async function (req, res) {
         console.error('Error sending email:', error);
         // Log the email error, but don't affect the client's response
       });
-
-    // console.log(
-    //   `${getDateAndTime()}: Book return process completed successfully by ${admin}`
-    // );
-    // sendEmail(userThatHasBook.email, message)
-    //   .then(() => {
-    //     console.log(
-    //       `${getDateAndTime()}: Book return process completed successfully by ${admin}`
-    //     );
-    //     res.send({
-    //       status: 'Ok',
-    //       msg: `The book ${bookExists.title} was returned by ${userThatHasBook.name} ${userThatHasBook.lastName} successfully. This book had to be returned on the following date: ${dueDate}`,
-    //     });
-    //   })
-    //   .catch((error) => {
-    //     console.error('Error sending email:', error);
-    //     res.status(500).send({
-    //       status: 'OK',
-    //       msg: `The book ${bookExists.title} was returned by ${userThatHasBook.name} ${userThatHasBook.lastName} successfully. This book had to be returned on the following date: ${dueDate}. PD: An error occurred while sending the email.`,
-    //     });
-    //   });
   }
 });
 
@@ -442,6 +434,11 @@ books.post('/getBook', async (req, res) => {
   const { barcode, name } = req.body;
   const requestedBarcode = barcode.toUpperCase();
 
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `A book search was started by ${name} with the following barcode: ${barcode}`
+  );
   console.log(
     `${getDateAndTime()}: A book search was started by ${name} with the following barcode: ${barcode}`
   );
@@ -454,11 +451,21 @@ books.post('/getBook', async (req, res) => {
       status: 'Error',
       msg: `There is no entry for the barcode ${barcode} registered in our database.`,
     });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The book does not seem to exist in database and a message was sent to client.`
+    );
     console.log(
       'The book does not seem to exist in database and a message was sent to client.'
     );
   } else {
     res.send({ status: 'ok', msg: 'Book was found.', bookExists });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The book search was finished succesfully by ${name} and the information was sent to client.`
+    );
     console.log(
       `${getDateAndTime()}: The book search was finished succesfully by ${name} and the information was sent to client.`
     );
@@ -475,6 +482,11 @@ books.post('/getBook', async (req, res) => {
 books.post('/new-book', async (req, res) => {
   // The book to be added to database comes from client side as an object.
   const { book, name } = req.body;
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Book creation started by ${name}.`
+  );
   console.log(`${getDateAndTime()}: Book creation started by ${name}`);
   if (
     book.title === undefined ||
@@ -504,11 +516,15 @@ books.post('/new-book', async (req, res) => {
       status: 'Error',
       msg: 'Please make sure all fields are registered.',
     });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The process could not be completed because not all fields were registered. A message was sent to the client.`
+    );
     console.log(
       `${getDateAndTime()}: The process could not be completed because not all fields were registered. A message was sent to the client.`
     );
   } else {
-    //
     const bookExists = await BookModel.findOne({
       barcode: book.barcode.toUpperCase(),
     });
@@ -518,6 +534,11 @@ books.post('/new-book', async (req, res) => {
         status: 'Error',
         msg: `The barcode ${bookExists.barcode} is already registered in our database for the book ${bookExists.title}`,
       });
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `The process could not be completed because the book already exists. A message was sent to client.`
+      );
       console.log(
         `${getDateAndTime()}: The process could not be completed because the book already exists. A message was sent to client.`
       );
@@ -550,6 +571,11 @@ books.post('/new-book', async (req, res) => {
           });
         }
 
+        insertLogIntoDatabase(
+          getDateAndTime()[0],
+          getDateAndTime()[1],
+          `The book ${book.title} with barcode ${book.barcode} was registered in the database by ${name}.`
+        );
         console.log(
           `${getDateAndTime()}: The book ${book.title} with barcode ${
             book.barcode
@@ -575,8 +601,19 @@ books.post('/update', async (req, res) => {
   // The book to be added to database comes from client side as an object.
   const { book, name } = req.body;
 
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Book update started by ${name}.`
+  );
   console.log(`${getDateAndTime()}: Book update started by ${name}.`);
-  //
+
+  if (!book || book === undefined) {
+    // console.log('There is no barcode');
+    res.send({ status: 'Error', msg: 'Book information was not received.' });
+    return;
+  }
+
   const bookExists = await BookModel.findOne({
     barcode: book.barcode.toUpperCase(),
   });
@@ -588,11 +625,21 @@ books.post('/update', async (req, res) => {
       status: 'Error',
       msg: `The requested book does not appear in our database. If you believe this is a mistake, please contact ICT Support.`,
     });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The process could not be completed because the book does not appear in the database. A message was sent to the client.`
+    );
     console.log(
       `${getDateAndTime()}: The process could not be completed because the book does not appear in the database. A message was sent to the client.`
     );
   } else {
     if (!bookExists.available) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Book update was not completed because book is in circulation.`
+      );
       console.log(
         `${getDateAndTime()}: Book update was not completed because book is in circulation.`
       );
@@ -625,6 +672,11 @@ books.post('/update', async (req, res) => {
         status: 'ok',
         msg: 'Book was updated successfully. Please load the book again to check!',
       });
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `The process was completed succesfully by ${name}.`
+      );
       console.log(
         `${getDateAndTime()}: The process was completed succesfully by ${name}.`
       );
@@ -643,11 +695,21 @@ books.post('/delete', async (req, res) => {
   // The book to be added to database comes from client side as an object.
   const { barcode, name } = req.body;
 
+  insertLogIntoDatabase(
+    getDateAndTime()[0],
+    getDateAndTime()[1],
+    `Book deletion started by ${name}.`
+  );
   console.log(`${getDateAndTime()}: Book deletion started by ${name}`);
+
+  if (!barcode || barcode === undefined) {
+    // console.log('There is no barcode');
+    res.send({ status: 'Error', msg: 'Please enter a valid barcode' });
+    return;
+  }
 
   const bookToDeleteBarcode = barcode;
 
-  //
   const bookExists = await BookModel.findOne({
     barcode: bookToDeleteBarcode.toUpperCase(),
   });
@@ -657,11 +719,21 @@ books.post('/delete', async (req, res) => {
       status: 'Error',
       msg: `The requested book does not appear in our database. If you believe this is a mistake, please contact ICT Support.`,
     });
+    insertLogIntoDatabase(
+      getDateAndTime()[0],
+      getDateAndTime()[1],
+      `The process coulnd not be completed because the book does not seem to appear in the database. A message was sent to the client.`
+    );
     console.log(
       `${getDateAndTime()}: The process coulnd not be completed because the book does not seem to appear in the database. A message was sent to the client.`
     );
   } else {
     if (!bookExists.available) {
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `Book deletion was not completed because book is in circulation.`
+      );
       console.log(
         `${getDateAndTime()}: Book deletion was not completed because book is in circulation.`
       );
@@ -676,6 +748,11 @@ books.post('/delete', async (req, res) => {
         status: 'ok',
         msg: 'Book was deleted successfully. So sad to hear that book has gone away 😢',
       });
+      insertLogIntoDatabase(
+        getDateAndTime()[0],
+        getDateAndTime()[1],
+        `The process was completed succesfully and the book was deleted by ${name}.`
+      );
       console.log(
         `${getDateAndTime()}: The process was completed succesfully by ${name}.`
       );
