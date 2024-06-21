@@ -105,7 +105,7 @@ textbooks.post('/assign', async function (req, res) {
   insertLogIntoDatabase(
     getDateAndTime()[0],
     getDateAndTime()[1],
-    `Textbook assignment was started by: ${admin}.`
+    `Textbook assignment was started by: ${admin} for student: ${student}. Textbooks: ${textbooksWithSamples}`
   );
   console.log(
     `${getDateAndTime()}: Textbook assignment was started by: ${admin}`
@@ -211,7 +211,9 @@ textbooks.post('/assign', async function (req, res) {
     insertLogIntoDatabase(
       getDateAndTime()[0],
       getDateAndTime()[1],
-      `Textbook assignment was completed successfully by: ${admin}.`
+      `Textbook assignment was completed successfully by: ${admin}. ${
+        student.name + ' ' + student.lastName
+      },has been assigned the following textbooks for the current school year: ${listOfTextbooks}`
     );
     console.log(
       `${getDateAndTime()}: Textbook assignment was completed successfully by: ${admin}`
@@ -305,11 +307,14 @@ textbooks.get('/rented', async function (req, res) {
  * Name : Return assigned text books
  * Method : POST
  * Route : /unassign
- * Description : This route will let the application receive the required information from frontend to be able to unassign/return a package of textbooks from a certain user. The function receives a student object number, an array of books to be returned and observations if there are any. With this information it assigns all of the textbooks inside the array to the user after checking all of the conditions required.
+ * Description : This route will let the application receive the required information from frontend to be able to unassign/return a package of textbooks from a certain user. The function receives a student object number, an array of books to be returned and observations if there are any. With this information it unassigns all of the textbooks inside the array to the user after checking all of the conditions required.
  */
 textbooks.post('/unassign', async function (req, res) {
   const { student, textbooksWithSamples, observations, admin } = req.body;
 
+  // console.log('The following data mathes the student:');
+  // console.log(student);
+  // console.log(typeof student);
   if (!student || !textbooksWithSamples) {
     return res.send({
       status: 'Error',
@@ -319,7 +324,7 @@ textbooks.post('/unassign', async function (req, res) {
   insertLogIntoDatabase(
     getDateAndTime()[0],
     getDateAndTime()[1],
-    `Textbook unassignment was started by: ${admin}.`
+    `Textbook assignment was started by: ${admin} for student: ${student}. Textbooks: ${textbooksWithSamples}`
   );
   console.log(
     `${getDateAndTime()}: Textbook unassignment was started by: ${admin}`
@@ -342,14 +347,15 @@ textbooks.post('/unassign', async function (req, res) {
       const textBookExists = await TextBookModel.findOne({
         title: textbook.title,
         number: Number(textbook.sample),
+        userDocument: Number(student.document),
       });
 
       if (!textBookExists) {
         console.log(
-          `${textbook.title} number ${textbook.sample} does not seem to exist in the database.`
+          `${textbook.title} number ${textbook.sample} does not seem to exist in the database or doesn't seem to match with student.`
         );
         errorMessages.push(
-          `${textbook.title} number ${textbook.sample} does not seem to exist in the database.`
+          `${textbook.title} number ${textbook.sample} doesn't seem to exist in the database or doesn't seem to match with student.`
         );
         continue; // Continue to the next iteration of the loop
       } else {
@@ -359,7 +365,7 @@ textbooks.post('/unassign', async function (req, res) {
         // Check if the textbook is available
         if (
           textBookExists.available &&
-          textBookExists.userDocument === student
+          textBookExists.userDocument === Number(student.document)
         ) {
           console.log(
             `${textbook.title} number ${textbook.sample} doesn't match with student ${student}. Skipping update.`
@@ -412,7 +418,7 @@ textbooks.post('/unassign', async function (req, res) {
     // If there are error messages, send them to the frontend and return early
     if (errorMessages.length > 0) {
       console.log(
-        `Some errors were encountered during the assignment process.`
+        `Some errors were encountered during the unassignment process.`
       );
       return res.send({
         status: 'error',
@@ -428,7 +434,9 @@ textbooks.post('/unassign', async function (req, res) {
     insertLogIntoDatabase(
       getDateAndTime()[0],
       getDateAndTime()[1],
-      `Textbook unassignment was completed successfully by: ${admin}.`
+      `Textbook unassignment was completed successfully by: ${admin}. ${
+        student.name + ' ' + student.lastName
+      },has returned the following textbooks: ${listOfTextbooks} `
     );
     console.log(
       `${getDateAndTime()}: Textbook unassignment was completed successfully by: ${admin}`
@@ -448,6 +456,181 @@ textbooks.post('/unassign', async function (req, res) {
       getDateAndTime()[1],
       `Some errors were encountered during the assignment process and it could not be completed.`
     );
+    return res.send({
+      status: 'error',
+      msg: 'An error occurred while trying to assign textbooks. Please contact ICT Support.',
+    });
+  }
+});
+
+/**
+ * 5)
+ * Name : Return single assigned textbook
+ * Method : POST
+ * Route : /unassign-one
+ * Description : This route will let the application receive the required information from frontend to be able to unassign/return a single textbook from a certain user. The function receives a student object and textbook information. With this information it unassigns the textbook to the user after checking all of the conditions required.
+ */
+textbooks.post('/unassign-one', async function (req, res) {
+  const { userThatHasTb, textbookToUnassign, admin } = req.body;
+
+  // console.log('The following data mathes the student:');
+  // console.log(student);
+  // console.log(typeof student);
+  if (!userThatHasTb || !textbookToUnassign) {
+    return res.send({
+      status: 'Error',
+      msg: 'No information regarding textbooks was received. Please contact ICT Support.',
+    });
+  }
+  // insertLogIntoDatabase(
+  //   getDateAndTime()[0],
+  //   getDateAndTime()[1],
+  //   `Textbook assignment was started by: ${admin} for student: ${
+  //     userThatHasTb.name +
+  //     ' ' +
+  //     userThatHasTb.lastName +
+  //     ' with document ' +
+  //     userThatHasTb.document
+  //   }. Textbook: ${
+  //     textbookToUnassign.title + ' # ' + textbookToUnassign.sample
+  //   }`
+  // );
+  console.log(
+    `${getDateAndTime()}: Textbook unassignment was started by: ${admin}`
+  );
+
+  const errorMessages = [];
+
+  if (isNaN(textbookToUnassign.sample)) {
+    console.log(`Invalid sample number: ${textbookToUnassign.sample}.`);
+    errorMessages.push(
+      `The textbook was not returned because of an invalid sample number:\n ${textbookToUnassign.title}.\nSample number received: ${textbookToUnassign.sample}`
+    );
+  }
+
+  try {
+    // Textbook is searched in database.
+    const textBookExists = await TextBookModel.findOne({
+      title: textbookToUnassign.title,
+      number: Number(textbookToUnassign.sample),
+      userDocument: Number(userThatHasTb.document),
+    });
+    if (!textBookExists) {
+      console.log(
+        `${textbookToUnassign.title} number ${textbookToUnassign.sample} does not seem to exist in the database or doesn't seem to match with student.`
+      );
+      errorMessages.push(
+        `${textbookToUnassign.title} number ${textbookToUnassign.sample} doesn't seem to exist in the database or doesn't seem to match with student.`
+      );
+    } else {
+      console.log(
+        `${textbookToUnassign.title} number ${textbookToUnassign.sample} is available in the database.`
+      );
+      // Check if the textbookToUnassign is available
+      if (
+        textBookExists.available &&
+        textBookExists.userDocument === Number(userThatHasTb.document)
+      ) {
+        console.log(
+          `${textbookToUnassign.title} number ${textbookToUnassign.sample} doesn't match with student ${userThatHasTb.document}. Skipping update.`
+        );
+        // Send response to frontend indicating unavailability
+        errorMessages.push(
+          `${textbookToUnassign.title} number ${
+            textbookToUnassign.sample
+          } figures as available for rent so it was not unassigned or doesn't match with student ${
+            userThatHasTb.name +
+            ' ' +
+            userThatHasTb.lastName +
+            ' with document ' +
+            userThatHasTb.document
+          }. If you believe this is a mistake, contact ICT Support.`
+        );
+      }
+
+      await TextBookModel.updateOne(
+        {
+          title: textbookToUnassign.title,
+          number: Number(textbookToUnassign.sample),
+        },
+        {
+          $set: {
+            userDocument: 0,
+            available: true,
+            dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+          },
+          $push: {
+            rentalHistory: {
+              userDocument: Number(userThatHasTb.document),
+              dateRented: textbookToUnassign.dateRented,
+              dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              conditions: 'none',
+            },
+          },
+        }
+      );
+
+      await UserModel.updateOne(
+        { document: Number(userThatHasTb.document) },
+        {
+          $push: {
+            textbookHistory: {
+              textbook: textbookToUnassign.title,
+              number: Number(textbookToUnassign.sample),
+              dateRented: textbookToUnassign.dateRented,
+              dateReturned: getDateAndTime()[0] + ' ' + getDateAndTime()[1],
+              conditions: 'none',
+            },
+          },
+        }
+      );
+
+      console.log('Update successful');
+    }
+    if (errorMessages.length > 0) {
+      console.log(
+        `Some errors were encountered during the unassignment process.`
+      );
+      return res.send({
+        status: 'error',
+        msg: errorMessages.join('\n'),
+      });
+    }
+
+    const message = `Dear ${
+      userThatHasTb.name + ' ' + userThatHasTb.lastName
+    }, \nYou have returned the following textbook for the current school year: \n\n${
+      textbookToUnassign.title + ' #' + textbookToUnassign.sample
+    } \nIf you have more textbooks left, please return them to the Knowledge Centre.\nThanks for using our service.\nRegards,`;
+
+    sendEmail([userThatHasTb.email, 'kc@britishschool.edu.co'], message);
+    // insertLogIntoDatabase(
+    //   getDateAndTime()[0],
+    //   getDateAndTime()[1],
+    //   `Textbook unassignment was completed successfully by: ${admin}. ${
+    //     userThatHasTb.name + ' ' + userThatHasTb.lastName
+    //   }, has returned the following textbook: ${textbookToUnassign.title + ' #' + textbookToUnassign.sample} `
+    // );
+    console.log(
+      `${getDateAndTime()}: Textbook unassignment was completed successfully by: ${admin}`
+    );
+
+    return res.send({
+      status: 'ok',
+      msg: `Textbooks unassigned successfully.`,
+    });
+
+    // If there are error messages, send them to the frontend and return early
+  } catch (error) {
+    console.error('Error:', error);
+    console.log(
+      `Some errors were encountered during the assignment process and it could not be completed.`
+    );
+    // insertLogIntoDatabase(
+    //   getDateAndTime()[0],
+    //   getDateAndTime()[1],
+    //   `Some errors were encountered during the assignment process and it could not be completed.`
+    // );
     return res.send({
       status: 'error',
       msg: 'An error occurred while trying to assign textbooks. Please contact ICT Support.',
